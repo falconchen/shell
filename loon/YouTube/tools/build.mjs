@@ -13,6 +13,8 @@ const names = ['YouTubeFeed', 'YouTubePlayback', 'YouTubeConfig', 'YouTubeLogger
 const bundles = {request: ['YouTubeConfig', 'YouTubePlayback', 'YouTubeLogger'], response: names};
 const qxRoot = new URL('../../quantumultx/YouTube/', root);
 const qxBundles = {request: ['YouTubePlayback'], response: ['YouTubeFeed', 'YouTubePlayback']};
+const qxDownloadRoot = new URL('../../quantumultx/YouTubeDownload/', root);
+const qxPlusRoot = new URL('../../quantumultx/YouTubePlus/', root);
 const check = process.argv.includes('--check');
 if (process.argv.slice(2).some(value => value !== '--check')) throw new Error('仅支持 --check 参数');
 
@@ -92,9 +94,11 @@ async function minifyBundle(name, source, target) {
  * 更新时间：2026-10-06
  * @param {string} phase 请求或响应阶段。
  * @param {boolean} debug 是否生成输出处理结果的调试版；除调试开关外与正式版相同。
+ * @param {boolean} [plus] 是否生成合并版响应包：首页响应先去广告，再交给独立的下载菜单脚本处理；其他接口与正式版相同。
  * @returns {Promise<Object>} 压缩文本、文件地址及前后体积。
  */
-async function compileQXScript(phase, debug) {
+async function compileQXScript(phase, debug, plus) {
+  if (plus && (phase !== 'response' || debug)) throw new Error('合并版只有正式的响应包');
   const modules = await readModules(qxBundles[phase]);
   const runtime = await fs.readFile(new URL('tools/qx-runtime.js', root), 'utf8');
   const saved = JSON.parse(await fs.readFile(new URL('options.json', qxRoot), 'utf8'));
@@ -107,6 +111,19 @@ async function compileQXScript(phase, debug) {
        if (/\\/youtubei\\/v1\\/(?:player|get_watch|player\\/ad_break)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();`
     : `if (/\\/youtubei\\/v1\\/(?:browse|next|search)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubeFeed();
        if (/\\/youtubei\\/v1\\/(?:player|get_watch|reel\\/reel_watch_sequence)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();`;
+  // 合并版：下载菜单脚本原样包进函数，以形参接收去广告后的正文；去广告模块结束时不直接完成，而是把结果交给它。
+  // 菜单脚本放行（返回空对象）时沿用去广告的结果，两者互不知道对方存在。
+  const chain = !plus ? '' : `function ytQXDownloadMenu($response, $done){\n${await fs.readFile(new URL('YouTubeDownloadMenu.js', qxDownloadRoot), 'utf8')}\n}
+        if (/\\/youtubei\\/v1\\/browse(?:\\?[^#]*)?$/i.test(url)) {
+          var ytQXFinish = $done;
+          $done = function (output) {
+            var body = output && output.body instanceof Uint8Array ? output.body : $response.body;
+            if (!(body instanceof Uint8Array)) return ytQXFinish(output);
+            ytQXDownloadMenu({statusCode:$response.status, headers:$response.headers, bodyBytes:body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)}, function (result) {
+              ytQXFinish(result && result.bodyBytes instanceof ArrayBuffer ? {body:new Uint8Array(result.bodyBytes)} : output);
+            });
+          };
+        }`;
   // 功能源码通过形参取得适配后的接口，无需感知 Quantumult X；请求阶段的 $response 保持未定义。
   const source = `if (typeof $done === 'function') (function(){
       ${runtime}
@@ -114,11 +131,12 @@ async function compileQXScript(phase, debug) {
       if (!qx) return;
       (function($request, $response, $done, $argument, $persistentStore){
         var handlers={${modules.join(',\n')}};
-        var url = String($request.url || '');
+        var url = String($request.url || '');${chain && '\n        ' + chain}
         ${route}
         return $done({});
       })(qx.request, qx.response, qx.done, qx.argument, qx.store);
     })();`;
+  if (plus) return minifyBundle('quantumultx plus response', source, new URL('dist/response.min.js', qxPlusRoot));
   return minifyBundle(`quantumultx ${phase}${debug ? ' debug' : ''}`, source, new URL(`dist/${phase}${debug ? '.debug' : ''}.min.js`, qxRoot));
 }
 
@@ -136,10 +154,28 @@ async function compileQXDebugSnippet() {
   return {name: 'quantumultx debug snippet', code, target: new URL('YouTubeNoAds.debug.snippet', qxRoot), before: Buffer.byteLength(snippet), after: Buffer.byteLength(code)};
 }
 
-// 全部文件成功生成并通过语法检查后才开始写入；构建过程不修改源码、主插件或 Quantumult X 片段。
+/**
+ * 功能：由去广告片段和下载菜单片段生成合并版片段：响应脚本换成合并包，并附上下载站的代发规则；请求脚本沿用去广告版。
+ * 更新时间：2026-10-06
+ * @returns {Promise<Object>} 合并版片段文本及文件地址。
+ */
+async function compileQXPlusSnippet() {
+  const snippet = await fs.readFile(new URL('YouTubeNoAds.snippet', qxRoot), 'utf8');
+  const download = await fs.readFile(new URL('YouTubeDownloadMenu.snippet', qxDownloadRoot), 'utf8');
+  const title = '# YouTube 去广告（Quantumult X）\n', response = '/quantumultx/YouTube/dist/response.min.js';
+  const echo = download.split('\n').filter(line => !line.startsWith('#') && line.includes(' url script-echo-response '));
+  if (!snippet.startsWith(title) || snippet.split(response).length !== 2 || echo.length !== 1) throw new Error('片段的标题、脚本地址或代发规则与预期不符');
+  const code = '# YouTube 去广告 + 第三方下载菜单（Quantumult X，合并版）\n# 自动生成，请修改 YouTubeNoAds.snippet 或 YouTubeDownload/ 后重新构建。同一个首页响应先去广告、再加入“下载视频”“下载音频”菜单；\n' +
+    '# 用它替代 YouTubeNoAds.snippet 和 YouTubeDownloadMenu.snippet，三者不要同时启用。以下为去广告片段的说明。\n' +
+    snippet.slice(title.length).replace(response, '/quantumultx/YouTubePlus/dist/response.min.js').trimEnd() +
+    '\n\n# 下载菜单的代发规则：拦截菜单项打开的地址，由脚本向下载站发 POST 并返回其响应。\n' + echo[0] + '\n';
+  return {name: 'quantumultx plus snippet', code, target: new URL('YouTubePlus.snippet', qxPlusRoot), before: Buffer.byteLength(snippet), after: Buffer.byteLength(code)};
+}
+
+// 全部文件成功生成并通过语法检查后才开始写入；构建过程不修改源码、主插件或手写的 Quantumult X 片段。
 const results = (await Promise.all(Object.keys(bundles).map(compileScript))).concat(
-  await Promise.all([false, true].flatMap(debug => Object.keys(qxBundles).map(phase => compileQXScript(phase, debug)))), await compileQXDebugSnippet());
-if (!check) for (const base of [root, qxRoot]) await fs.mkdir(new URL('dist/', base), {recursive: true});
+  await Promise.all([false, true].flatMap(debug => Object.keys(qxBundles).map(phase => compileQXScript(phase, debug)))), await compileQXDebugSnippet(), await compileQXScript('response', false, true), await compileQXPlusSnippet());
+if (!check) for (const base of [root, qxRoot, qxPlusRoot]) await fs.mkdir(new URL('dist/', base), {recursive: true});
 for (const result of results) {
   if (check) {
     const saved = await fs.readFile(result.target, 'utf8').catch(() => null);
