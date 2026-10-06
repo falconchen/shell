@@ -21,7 +21,7 @@ const tap = id => msg(4, nested([169495254, 462702848, 1, 200453700, 1, 48687757
 const menu = (...items) => msg(5, nested([169495254, 98150882, 1, 66439850], cat(...items, msg(4, text('TRACK-KEEP')))));
 const card = (...parts) => msg(1, msg(50195462, cat(msg(1, nested([153515154, 172660663, 1, 168777401, 5, 232954548, 18], cat(...parts))), msg(4, [1, 2]))));
 const divider = msg(1, msg(50195462, msg(1, nested([153515154, 172660663, 1, 168777401, 5, 347043917], text('DIVIDER')))));
-const added = id => msg(1, msg(66441108, cat(label('从第三方下载'), msg(2, [8, 100]),
+const added = id => msg(1, msg(66441108, cat(label('从第三方下载'), msg(2, [8, 147, 1]),
   msg(3, msg(49679253, cat(msg(1, text('https://example.com/download?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))), [16, 1]))))));
 const continuation = list => cat(msg(1, text('CONTEXT-KEEP')), msg(10, msg(49399797, cat(list, msg(2, text('TOKEN-KEEP'))))), msg(777, text('REGISTRY-KEEP')));
 const home = list => nested([9, 58173949, 1, 58174010, 4, 49399797], list);
@@ -53,20 +53,20 @@ test('snippet only binds browse responses to the standalone script', () => {
   for (const name of ['next', 'player', 'get_watch', 'browse/extra']) assert.ok(!new RegExp(pattern).test('https://youtubei.googleapis.com/youtubei/v1/' + name));
 });
 
-for (const [name, wrap] of [['continuation', continuation], ['initial home', home]]) test(`${name} list gets one item appended to each video menu and nothing else changes`, () => {
+for (const [name, wrap] of [['continuation', continuation], ['initial home', home]]) test(`${name} list gets one item prepended to each video menu and nothing else changes`, () => {
   const items = id => [service('不感兴趣'), save(id), service('举报')];
   const before = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(...items('AAAAAAAAAAA')), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(...items('BBBB-BBB_BB')))));
-  const after = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(...items('AAAAAAAAAAA'), added('AAAAAAAAAAA')), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(...items('BBBB-BBB_BB'), added('BBBB-BBB_BB')))));
+  const after = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(added('AAAAAAAAAAA'), ...items('AAAAAAAAAAA')), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(added('BBBB-BBB_BB'), ...items('BBBB-BBB_BB')))));
   const result = run(before);
   assert.deepEqual(bytes(result), Buffer.from(after));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.1.0] browse added=2']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.1.2] browse added=2']);
   // 已含同名条目的菜单不重复添加。
   untouched(run(after));
 });
 
 test('video id falls back to the menu save command and invalid ids leave the card untouched', () => {
   const result = run(continuation(card(menu(save('CCCCCCCCCCC')))));
-  assert.deepEqual(bytes(result), Buffer.from(continuation(card(menu(save('CCCCCCCCCCC'), added('CCCCCCCCCCC'))))));
+  assert.deepEqual(bytes(result), Buffer.from(continuation(card(menu(added('CCCCCCCCCCC'), save('CCCCCCCCCCC'))))));
   untouched(run(continuation(card(menu(service('举报'))))));
   untouched(run(continuation(card(tap('too-short'), menu(service('举报'))))));
   untouched(run(continuation(card(tap('AAAA AAAAAA'), menu(service('举报'))))));

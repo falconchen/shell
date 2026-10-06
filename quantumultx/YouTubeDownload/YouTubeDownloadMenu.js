@@ -1,7 +1,7 @@
 /**
  * 文件：YouTubeDownloadMenu.js
- * 功能：在 YouTube 首页视频卡片的“⋯”菜单末尾加入一项，点击后打开第三方下载地址并带上视频网址。
- * 版本：0.1.0
+ * 功能：在 YouTube 首页视频卡片的“⋯”菜单开头加入一项，点击后打开第三方下载地址并带上视频网址。
+ * 版本：0.1.2
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
  * 状态：实验。结构取自 YouTube iOS 21.29.3 的一份首页续页响应，尚未在设备上验证。
@@ -11,9 +11,9 @@
   // 下载接口前缀，视频网址经 URL 编码后接在末尾。
   var API = "https://example.com/download?url=";
   var LABEL = "从第三方下载";
-  // 菜单图标编号；100 是样本中“分享”项使用的图标，下载图标的编号未知。
-  var ICON = 100;
-  var VERSION = "0.1.0";
+  // 菜单图标编号：147 为公开图标枚举中的 OFFLINE_DOWNLOAD（向下箭头）。该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致。
+  var ICON = 147;
+  var VERSION = "0.1.2";
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_FIELDS = 60000;
   // 首页首屏与续页中 SectionList 的位置，以及从列表项到视频卡片数据、再到菜单的固定路径。
@@ -144,7 +144,7 @@
     return changed ? join(parts) : bytes;
   }
   /**
-   * 功能：生成新的菜单项：MenuNavigationItemRenderer（66441108），文字、图标及打开网址的命令（49679253）。
+   * 功能：生成新的菜单项：MenuNavigationItemRenderer（66441108），文字、图标及打开网址的命令（UrlEndpoint，49679253；字段 2 为 1 即 TARGET_NEW_WINDOW）。
    * 更新时间：2026-10-06
    * @param {string} videoId 视频编号。
    * @returns {Uint8Array} 菜单列表中的一个字段 1。
@@ -157,16 +157,16 @@
   }
   var added = 0;
   /**
-   * 功能：在菜单最后一个条目之后加入下载项；菜单为空或已包含同名条目时不改动。
+   * 功能：在菜单第一个条目之前加入下载项；菜单为空或已包含同名条目时不改动。
    * 更新时间：2026-10-06
    * @param {Uint8Array} menu MenuRenderer（66439850）消息。
    * @param {string} videoId 视频编号。
    * @returns {Uint8Array} 新菜单或原菜单。
    */
   function addItem(menu, videoId) {
-    var records = parse(menu), last = -1, label = utf8(LABEL);
-    records.forEach(function (record, index) { if (record.no === 1 && record.wire === 2) last = index; });
-    if (last < 0) return menu;
+    var records = parse(menu), first = -1, label = utf8(LABEL);
+    records.forEach(function (record, index) { if (first < 0 && record.no === 1 && record.wire === 2) first = index; });
+    if (first < 0) return menu;
     for (var i = 0; i + label.length <= menu.length; i++) {
       var match = true;
       for (var j = 0; j < label.length && match; j++) match = menu[i + j] === label[j];
@@ -174,8 +174,8 @@
     }
     var parts = [];
     records.forEach(function (record, index) {
+      if (index === first) parts.push(menuItem(videoId));
       parts.push(menu.subarray(record.start, record.end));
-      if (index === last) parts.push(menuItem(videoId));
     });
     added++;
     return join(parts);
