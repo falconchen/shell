@@ -1,8 +1,8 @@
 /**
  * 文件：YouTubeFeed.js
  * 功能：清理首页与推荐信息流广告，并按开关隐藏首页 Shorts 推荐区。
- * 版本：2.6.0
- * 更新时间：2026-10-05
+ * 版本：2.6.1
+ * 更新时间：2026-10-06
  * 运行环境：Loon JavaScript
  */
 /**
@@ -216,7 +216,7 @@ function(k){if(v[k]!==undefined)out[k]=v[k];});if(v.url)out.url=url(v.url);if(v.
  */
 (function () {
   "use strict";
-  var VERSION = "2.6.0";
+  var VERSION = "2.6.1";
   var MAX_FIELDS = 30000;
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_JSON_NODES = 20000;
@@ -600,7 +600,7 @@ function (key) { try { $persistentStore.write(undefined, key); } catch (_) {} })
     sectionUnion: {49399797:"sectionList"},
     continuationUnion: {49399797:"sectionList", 51779776:"secondaryList"},
     sectionList: {1:"sectionItem", 32:"deferredUpdate"},
-    deferredUpdate: {1:"deferredItems"}, deferredItems: {1:"itemSection"}, secondaryList: {1:"secondaryItem"},
+    deferredUpdate: {1:"deferredItems"}, deferredItems: {1:"itemSection", 6:"deferredInsert"}, deferredInsert: {1:"sectionItem"}, secondaryList: {1:"secondaryItem"},
     sectionItem: {50195462:"itemSection"}, secondaryItem: {50195462:"itemSection"},
     itemSection: {1:"contentItem"}, contentItem: {153515154:"cardElement"}
   };
@@ -1010,6 +1010,13 @@ function (other) {return other.no >= 1000000 && other.no !== 153515154;})) fail(
         pendingAd = false; keptListCount++;
         if (kind === "itemSection") divider = listCount === 1 && result.divider;
       }
+      // 停留后按目标位置插入单个列表项的更新：字段 6 含待插入项（1）和目标位置（2）；待插入项为广告时移除整条插入指令。
+      if (kind === "deferredInsert" && r.no === 1) {
+        listCount++;
+        if (result.drop) return;
+        keptListCount++;
+      }
+      if (kind === "deferredItems" && r.no === 6 && result.drop) return;
       if (kind === "sectionItem" || kind === "secondaryItem") {
         if (result.drop) {
           if (records.some(
@@ -1034,6 +1041,7 @@ function (r) {return r.no === 1 || r.no === 4 || r.no === 8;});
       drop = removed > 0 && listCount > 0 && keptListCount === 0 && safeMetadata;
       divider = divider && listCount === 1 && safeMetadata;
     }
+    if (kind === "deferredInsert") drop = removed > 0 && listCount > 0 && keptListCount === 0;
     return {body:removed || shorts || dividers ? join(parts) : bytes, removed:removed, adaptive:adaptive, shorts:shorts, opaque:opaque, eml:eml, dividers:dividers, drop:drop, divider:divider};
   }
 

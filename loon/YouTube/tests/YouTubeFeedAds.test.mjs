@@ -376,6 +376,28 @@ test('malformed deferred update discards all edits and unknown deferred fields r
  assert.equal(Object.keys(run(unknown,{type:'application/x-protobuf'}).output).length,0);
 });
 
+for (const name of ['video_display_button_group_layout','full_width_portrait_image_layout']) test(`deferred single-item insert removes the whole ${name} insert command and keeps normal inserts byte exact`,()=>{
+ // 真机样本（iOS 21.29.3）：SectionList 32 → 1 → 6 = {1: 待插入的列表项, 2: {1: 目标位置键, 2: 标志}}。
+ const insert=item=>msg(6,cat(msg(1,item),msg(2,cat(msg(1,text('item_27_POSITION-KEEP')),[16,1]))));
+ const wrap=(...commands)=>cat(msg(10,msg(49399797,cat(msg(13,text('LIST-ID-KEEP')),msg(32,msg(1,cat(...commands))),[136,2,1]))),msg(777,text('REGISTRY-KEEP')));
+ const result=run(wrap(insert(normalEml()),insert(section(element(name))),insert(normalEml())),{type:'application/x-protobuf'});
+ assert.deepEqual(Buffer.from(result.output.body),Buffer.from(wrap(insert(normalEml()),insert(normalEml()))));
+ assert.ok(result.logs.some(x=>x.includes('removed=1')&&x.includes('removed_eml=1')));
+ assert.deepEqual(Buffer.from(run(wrap(insert(section(element(name)))),{type:'application/x-protobuf'}).output.body),Buffer.from(wrap()));
+ assert.equal(Object.keys(run(wrap(insert(normalEml())),{type:'application/x-protobuf'}).output).length,0);
+});
+test('deferred single-item insert keeps mixed, unverified and malformed inserts untouched',()=>{
+ const wrap=command=>nested([10,49399797,32,1],command);
+ const position=msg(2,msg(1,text('item_27_POSITION-KEEP')));
+ const pass=input=>assert.equal(Object.keys(run(input,{type:'application/x-protobuf'}).output).length,0);
+ pass(wrap(msg(6,cat(msg(1,section(element('video_display_button_group_layout',{command:false}))),position))));
+ pass(wrap(msg(6,cat(msg(1,section(element('video_display_button_group_layout'))),[10,4,1]))));
+ pass(wrap(msg(7,cat(msg(1,section(element('video_display_button_group_layout'))),position))));
+ // 同一条指令同时带广告项和普通项时只去掉广告项，保留指令和目标位置。
+ const mixed=run(wrap(msg(6,cat(msg(1,section(element('video_display_button_group_layout'))),msg(1,normalEml()),position))),{type:'application/x-protobuf'});
+ assert.deepEqual(Buffer.from(mixed.output.body),Buffer.from(wrap(msg(6,cat(msg(1,normalEml()),position)))));
+});
+
 for (const [fieldNo,path,name] of [
  [37,[253885845,1],'fullscreen_engagement_companion'],
  [42,[357104971,2,361256913,1,138681066,2,194605894,1],'engagement_header']
