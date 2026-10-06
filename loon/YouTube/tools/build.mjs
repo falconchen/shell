@@ -98,9 +98,9 @@ async function compileQXScript(phase) {
   const runtime = await fs.readFile(new URL('tools/qx-runtime.js', root), 'utf8');
   const saved = JSON.parse(await fs.readFile(new URL('options.json', qxRoot), 'utf8'));
   const regions = ['original', 'CN', 'HK', 'TW', 'US', 'JP', 'KR', 'SG', 'GB', 'DE', 'RU'];
-  for (const key of ['background_playback', 'hide_home_shorts']) if (typeof saved[key] !== 'boolean') throw new Error(`options.json 的 ${key} 必须为 true 或 false`);
+  for (const key of ['background_playback', 'hide_home_shorts', 'script_debug']) if (typeof saved[key] !== 'boolean') throw new Error(`options.json 的 ${key} 必须为 true 或 false`);
   if (!regions.includes(saved.playback_region)) throw new Error(`options.json 的 playback_region 必须为 ${regions.join('、')} 之一`);
-  const options = {background_playback: saved.background_playback, hide_home_shorts: saved.hide_home_shorts, playback_region: saved.playback_region};
+  const options = {background_playback: saved.background_playback, hide_home_shorts: saved.hide_home_shorts, playback_region: saved.playback_region, script_debug: saved.script_debug};
   const route = phase === 'request'
     ? `if (/^https:\\/\\/[a-z0-9-]+\\.googlevideo\\.com\\/initplayback(?:\\?[^#]*)?$/i.test(url)) return ytQXEmptyVideo($request, $done);
        if (/\\/youtubei\\/v1\\/(?:player|get_watch|player\\/ad_break)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();`

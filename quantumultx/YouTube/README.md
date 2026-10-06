@@ -54,11 +54,14 @@ Quantumult X 的重写片段没有插件参数界面，开关写在 `options.jso
 {
   "background_playback": true,
   "hide_home_shorts": true,
-  "playback_region": "original"
+  "playback_region": "original",
+  "script_debug": true
 }
 ```
 
-`playback_region` 可选 `original`、`CN`、`HK`、`TW`、`US`、`JP`、`KR`、`SG`、`GB`、`DE`、`RU`。修改后在 `loon/YouTube/` 重新构建并推送：
+`playback_region` 可选 `original`、`CN`、`HK`、`TW`、`US`、`JP`、`KR`、`SG`、`GB`、`DE`、`RU`。`script_debug` 为 `true` 时，脚本每处理一次响应会在 Quantumult X 日志里输出一行处理结果（如 `[YouTubeFeed 2.6.0] browse pass: removed=0 ...`），只含计数和格式，不含正文；用于排查漏掉的广告，当前为排查信息流广告而开启，排查结束后应改回 `false`。
+
+修改后在 `loon/YouTube/` 重新构建并推送：
 
 ```sh
 pnpm install --frozen-lockfile --ignore-scripts
