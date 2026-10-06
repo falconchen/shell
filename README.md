@@ -251,7 +251,7 @@ https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouT
 
 只做去广告时不需要引用它。它用于不想全局丢弃 UDP 443 的情况：让 YouTube 单独走关闭了 `udp-relay` 的节点，从而去掉第 1 步的 `udp_drop_list = 443`。这种做法尚未在设备上确认，配置方法和生效条件见 [全局 `udp_drop_list` 的取舍](quantumultx/YouTube/README.md#全局-udp_drop_list-的取舍)。
 
-分流规则的维护方式、开关修改方法、与 Loon 版的差异和待确认的问题见 [详细说明](quantumultx/YouTube/README.md)。Loon 用户请看 [Loon 插件总览](loon/README.md)。
+分流规则的维护方式、开关修改方法、与 Loon 版的差异和待确认的问题见 [详细说明](quantumultx/YouTube/README.md)。上游 teaoea/shell 后来也提供了 Quantumult X 版，但没有做过实机验证，本仓库不采用，原因见 [为什么不直接使用上游的 Quantumult X 版](quantumultx/YouTube/README.md#为什么不直接使用上游的-quantumult-x-版)。Loon 用户请看 [Loon 插件总览](loon/README.md)。
 
 ## 许可证
 

@@ -220,6 +220,34 @@ https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouT
 | 清除 googlevideo 响应的 `Alt-Svc` | 未移植 |
 | 日志工具与导出页面 | 未移植 |
 
+## 为什么不直接使用上游的 Quantumult X 版
+
+本仓库 fork 自 [teaoea/shell](https://github.com/teaoea/shell)。上游在 fork 之后也加入了 Quantumult X 支持（`plugins/YouTube/YouTubeNoAds.snippet`），与本目录是两套独立实现。以下结论基于上游 2026-10-06 的提交 `af81c9f`，2026-10-07 核对。
+
+**上游的 Quantumult X 版没有做过实机验证。** 这是上游自己的说明：
+
+- README 的平台对照表里，Quantumult X 一行写的是「已模拟验证；未做实机验证」；
+- 片段头部注释写着「未完成圈 X 实机验证」。
+
+模拟验证是在 Node 里伪造 Quantumult X 的请求、响应和存储接口来运行脚本，只能证明脚本在假设的接口下逻辑正确，不能证明 Quantumult X 按这些假设运行。上游有实机反馈的只有 Loon 版原有的去广告方案。
+
+具体到规则，上游版与本目录有四处差别：
+
+| | 上游 | 本目录 |
+| --- | --- | --- |
+| 初始化请求 `initplayback` | 原样放行，没有移植 Loon 的空白视频方案；上游说明「不能据此声称已获得相同效果」 | 对 YouTube App 的 POST 返回空白视频，已在设备上确认片头／中插广告消失 |
+| QUIC 回退 | 不拦 UDP 443，只在 googlevideo 的响应里写 `Alt-Svc: clear` | 要求拦 UDP 443，原因见「为什么要拦 UDP 443」 |
+| MitM 域名 | 写在注释里，需手动加入主配置 | 片段自带 `hostname` 行 |
+| 脚本体积 | 四个平台共用，请求包约 169 KB、响应包约 198 KB | 只含 Quantumult X 需要的模块，约 79 KB 和 110 KB |
+
+第二项决定了上游版能否生效取决于用户的节点：节点转发 UDP 时，YouTube 走 QUIC，规则不会命中。
+
+**上游的字幕自动翻译在设备上出错。** 本目录曾在 1.0.3 引入上游的字幕翻译模块，模拟测试全部通过，但用户在设备上实测时，部分视频频繁提示字幕加载出错，当天撤回。这是上游的模拟验证未能发现设备问题的一个实例。
+
+**从上游采纳的做法。** `player/ad_break` 改用 `script-echo-response` 应答，来自上游的写法，已在设备上确认（见「设备反馈」）。
+
+本地仓库以 `upstream` 远程跟踪上游，上游的 Quantumult X 版有实机验证或值得采纳的改动时再评估。
+
 ## 尚未单独确认的机制
 
 整体效果已有上面的设备反馈；下面几项是其中未被单独观察到的环节，出现异常时可按此排查。
