@@ -1,7 +1,7 @@
 /**
  * 文件：YouTubeDownloadMenu.js
- * 功能：在 YouTube 首页视频卡片的“⋯”菜单开头加入一项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
- * 版本：0.2.0
+ * 功能：在 YouTube 首页视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
+ * 版本：0.3.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
  * 状态：实验。结构取自 YouTube iOS 21.29.3 的一份首页续页响应，尚未在设备上验证。
@@ -9,13 +9,12 @@
 (function () {
   "use strict";
   // 菜单项打开的地址：下载站加 url 和 type 两个查询参数。YouTubeDownloadPost.js 拦截这一地址并改为表单 POST；
-  // 未被拦截时只会打开下载站首页。TYPE 可为 video 或 audio。
+  // 未被拦截时只会打开下载站首页。
   var SITE = "http://192.168.6.7:5100/";
-  var TYPE = "video";
-  var LABEL = "从第三方下载";
-  // 菜单图标编号：147 为公开图标枚举中的 OFFLINE_DOWNLOAD（向下箭头）。该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致。
-  var ICON = 147;
-  var VERSION = "0.2.0";
+  // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
+  // 该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致；147（OFFLINE_DOWNLOAD）已在设备上确认显示为向下箭头。
+  var ITEMS = [{label:"下载视频", icon:658, type:"video"}, {label:"下载音频", icon:21, type:"audio"}];
+  var VERSION = "0.3.0";
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_FIELDS = 60000;
   // 首页首屏与续页中 SectionList 的位置，以及从列表项到视频卡片数据、再到菜单的固定路径。
@@ -149,24 +148,25 @@
    * 功能：生成新的菜单项：MenuNavigationItemRenderer（66441108），文字、图标及打开网址的命令（UrlEndpoint，49679253；字段 2 为 1 即 TARGET_NEW_WINDOW）。
    * 更新时间：2026-10-06
    * @param {string} videoId 视频编号。
+   * @param {Object} item ITEMS 中的一项。
    * @returns {Uint8Array} 菜单列表中的一个字段 1。
    */
-  function menuItem(videoId) {
-    var url = SITE + "?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + videoId) + "&type=" + TYPE;
-    var label = message(1, message(1, message(1, utf8(LABEL))));
+  function menuItem(videoId, item) {
+    var url = SITE + "?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + videoId) + "&type=" + item.type;
+    var label = message(1, message(1, message(1, utf8(item.label))));
     var command = message(3, message(49679253, join([message(1, utf8(url)), scalar(2, 1)])));
-    return message(1, message(66441108, join([label, message(2, scalar(1, ICON)), command])));
+    return message(1, message(66441108, join([label, message(2, scalar(1, item.icon)), command])));
   }
   var added = 0;
   /**
-   * 功能：在菜单第一个条目之前加入下载项；菜单为空或已包含同名条目时不改动。
+   * 功能：在菜单第一个条目之前加入下载项；菜单为空或已含指向下载站的条目时不改动。
    * 更新时间：2026-10-06
    * @param {Uint8Array} menu MenuRenderer（66439850）消息。
    * @param {string} videoId 视频编号。
    * @returns {Uint8Array} 新菜单或原菜单。
    */
   function addItem(menu, videoId) {
-    var records = parse(menu), first = -1, label = utf8(LABEL);
+    var records = parse(menu), first = -1, label = utf8(SITE + "?url=");
     records.forEach(function (record, index) { if (first < 0 && record.no === 1 && record.wire === 2) first = index; });
     if (first < 0) return menu;
     for (var i = 0; i + label.length <= menu.length; i++) {
@@ -176,7 +176,7 @@
     }
     var parts = [];
     records.forEach(function (record, index) {
-      if (index === first) parts.push(menuItem(videoId));
+      if (index === first) ITEMS.forEach(function (item) { parts.push(menuItem(videoId, item)); });
       parts.push(menu.subarray(record.start, record.end));
     });
     added++;
