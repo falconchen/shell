@@ -93,13 +93,22 @@ test('search response gets the download menu through the merged bundle', () => {
   assert.equal(Object.keys(run(noAds, 'search', proto(input)).output).length, 0);
 });
 
+test('watch page recommendations are cleaned and get the download menu through the merged bundle', () => {
+  const input = cat(msg(8, msg(49399797, cat(video('AAAAAAAAAAA'), adSlot, plain))), msg(777, text('REGISTRY-KEEP')));
+  const cleaned = out(run(noAds, 'next', proto(input)), input);
+  assert.ok(cleaned.length < input.length && !cleaned.includes(Buffer.from(adSlot)));
+  const viaMenu = run(menuOnly, 'next', proto(new Uint8Array(cleaned)));
+  assert.ok(viaMenu.output.bodyBytes instanceof ArrayBuffer);
+  assert.deepEqual(out(run(plus, 'next', proto(input)), input), out(viaMenu, cleaned));
+});
+
 test('JSON home and search responses and every other endpoint behave exactly like the ad-only bundle', () => {
   const json = body => ({statusCode:200, headers:{'Content-Type':'application/json'}, body});
   const feed = JSON.stringify({contents:{sectionListRenderer:{contents:[{adSlotRenderer:{}}, {videoRenderer:{videoId:'KEEP'}}]}}});
   const player = JSON.stringify({playabilityStatus:{status:'OK'}, adPlacements:[{}], playerAds:[{}], videoDetails:{videoId:'v'}});
   const reel = JSON.stringify({entries:[{command:{reelWatchEndpoint:{videoId:'ad', adClientParams:{isAd:true}}}}, {command:{reelWatchEndpoint:{videoId:'keep'}}}]});
   for (const [name, response] of [['browse', json(feed)], ['next', json(feed)], ['search', json(feed)], ['player', json(player)], ['get_watch', json(player)], ['reel/reel_watch_sequence', json(reel)],
-    ['next', proto(continuation(video('AAAAAAAAAAA'), adSlot))], ['log_event', proto(continuation(video('AAAAAAAAAAA')))]]) {
+    ['player', proto(continuation(video('AAAAAAAAAAA'), adSlot))], ['log_event', proto(continuation(video('AAAAAAAAAAA')))]]) {
     const a = run(plus, name, response), b = run(noAds, name, response);
     assert.deepEqual(JSON.parse(JSON.stringify({...a.output, bodyBytes:a.output.bodyBytes && Array.from(new Uint8Array(a.output.bodyBytes))})),
       JSON.parse(JSON.stringify({...b.output, bodyBytes:b.output.bodyBytes && Array.from(new Uint8Array(b.output.bodyBytes))})), name);

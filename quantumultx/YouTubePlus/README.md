@@ -20,10 +20,10 @@ https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubePlus/
 
 ## 行为
 
-- 只有 `browse` 响应经过两步处理；`next`、`search`、`player`、`get_watch`、Shorts 与去广告版完全相同。
+- `browse`、`search`、`next` 的 Protobuf 响应经过两步处理；`player`、`get_watch`、Shorts 及 JSON 响应与去广告版完全相同。
 - 两步互相独立：一步没有改动或放行时，另一步的结果照常生效；都没有改动时响应原样放行。
-- 重写记录里每个 `browse` 条目会有一行 `[YouTubeDownloadMenu x.y.z] browse added=N`，N 为加了菜单的视频卡片数。
-- 下载菜单仍是实验功能，只覆盖首页卡片，下载站地址见 `YouTubeDownloadMenu.js`。
+- 重写记录里这三类条目各有一行 `[YouTubeDownloadMenu x.y.z] 接口名 added=N removed=M`，N 为加了菜单的视频卡片数，M 为移除的原有菜单项数。
+- 下载菜单仍是实验功能，覆盖首页、搜索首屏和播放页推荐列表的视频卡片，下载站地址见 `YouTubeDownloadMenu.js`。
 
 ## 验证
 
