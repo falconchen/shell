@@ -13,6 +13,15 @@
 
 这是整体使用效果的确认，没有逐视频统计、首帧计时或重写日志，不能据此承诺所有视频无广告或零启动等待，也不能单独证明下文每一项机制都已命中。本地测试另外证明：在模拟的 Quantumult X 接口下，清理结果与 Loon 发布包逐字节一致。
 
+### 2026-10-07：`ad_break` 改用 `script-echo-response`
+
+`player/ad_break` 自 1.0.1 起改用 Quantumult X 专门用于本地应答的 `script-echo-response`，此前与播放请求共用 `script-request-body` 并在脚本里直接应答。用户更新后反馈：
+
+- 日志出现 `[YouTubeNoAds 1.0.1] request player/ad_break answered`，规则命中并由脚本应答；
+- 中插广告没有出现。
+
+这次反馈没有记录设备型号、系统和 YouTube 版本。
+
 ## 功能
 
 | 功能 | 状态 |
@@ -216,7 +225,6 @@ https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouT
 整体效果已有上面的设备反馈；下面几项是其中未被单独观察到的环节，出现异常时可按此排查。
 
 - **请求脚本直接应答。** 初始化空视频靠 `script-request-header` 脚本用 `$done({status, headers, body})` 直接返回响应。Quantumult X 官方示例没有写明这一用法。如果初始化规则不生效，改用片段末尾注释里的 `reject-200` 备用行。
-- **`ad_break` 的应答方式。** `player/ad_break` 自 2026-10-07 起改用 Quantumult X 专门用于本地应答的 `script-echo-response`，此前与播放请求共用 `script-request-body` 并在脚本里直接应答。上面的设备反馈是改动前取得的，改动后尚未在设备上重新确认；不生效时中插广告会重新出现。
 - **空白视频内容。** Loon `reject_video` 返回的具体字节没有公开，这里用的是自行生成的无轨道 MP4。用户在 Quantumult X 上确认带此规则时播放正常，但没有单独对比去掉这条规则的效果。
 - **请求正文压缩。** 如果 Quantumult X 交给脚本的播放器请求正文仍是 gzip 压缩的，脚本会原样放行，不影响播放，但请求侧的广告协商清理不生效。
 - **JSON 正文。** Quantumult X 的脚本环境没有 `TextDecoder`，适配层对 JSON 类型使用字符串正文，Protobuf 使用 `bodyBytes`。
