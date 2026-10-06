@@ -1,7 +1,8 @@
 /**
  * 文件：YouTubeDownloadMenu.js
  * 功能：在 YouTube 首页视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
- * 版本：0.3.0
+ *       同时移除 App 自带的离线下载条目。
+ * 版本：0.4.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
  * 状态：实验。结构取自 YouTube iOS 21.29.3 的一份首页续页响应，尚未在设备上验证。
@@ -14,7 +15,11 @@
   // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
   // 该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致；147（OFFLINE_DOWNLOAD）已在设备上确认显示为向下箭头。
   var ITEMS = [{label:"下载视频", icon:658, type:"video"}, {label:"下载音频", icon:21, type:"audio"}];
-  var VERSION = "0.3.0";
+  var VERSION = "0.4.0";
+  // 是否移除 App 自带的“下载视频”。服务器下发的菜单里没有这四个字：样本中位于“保存到播放列表”和“分享”之间的条目
+  // 是 MenuServiceItemRenderer（66441155），命令为 73080600（带视频编号），图标 57（OFFLINE_ADD），文字为“立即保存”，
+  // 位置与 App 显示“下载视频”的位置一致，推断由 App 按离线状态改写文字。该对应关系没有公开定义佐证。
+  var REMOVE_NATIVE_DOWNLOAD = true;
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_FIELDS = 60000;
   // 首页首屏与续页中 SectionList 的位置，以及从列表项到视频卡片数据、再到菜单的固定路径。
@@ -157,9 +162,16 @@
     var command = message(3, message(49679253, join([message(1, utf8(url)), scalar(2, 1)])));
     return message(1, message(66441108, join([label, message(2, scalar(1, item.icon)), command])));
   }
-  var added = 0;
+  var added = 0, removed = 0;
   /**
-   * 功能：在菜单第一个条目之前加入下载项；菜单为空或已含指向下载站的条目时不改动。
+   * 功能：判断菜单条目是否为 App 自带的离线下载项：MenuServiceItemRenderer（66441155）的命令（字段 3）含 73080600。
+   * 更新时间：2026-10-06
+   * @param {Uint8Array} item 菜单列表中一个字段 1 的内容。
+   * @returns {boolean} 是否为离线下载项。
+   */
+  function nativeDownload(item) { return !!find(item, [66441155, 3, 73080600]); }
+  /**
+   * 功能：在菜单第一个条目之前加入下载项，并按开关去掉 App 自带的离线下载项；菜单为空或已含指向下载站的条目时不改动。
    * 更新时间：2026-10-06
    * @param {Uint8Array} menu MenuRenderer（66439850）消息。
    * @param {string} videoId 视频编号。
@@ -177,6 +189,7 @@
     var parts = [];
     records.forEach(function (record, index) {
       if (index === first) ITEMS.forEach(function (item) { parts.push(menuItem(videoId, item)); });
+      if (REMOVE_NATIVE_DOWNLOAD && record.no === 1 && record.wire === 2 && nativeDownload(menu.subarray(record.payloadStart, record.end))) { removed++; return; }
       parts.push(menu.subarray(record.start, record.end));
     });
     added++;
@@ -240,6 +253,6 @@
   var result = {};
   try { result = run(); }
   catch (error) { result = {}; added = "error:" + (error && error.message || "unknown"); }
-  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] browse " + (typeof added === "number" ? "added=" + added : added));
+  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] browse " + (typeof added === "number" ? "added=" + added + " removed_native=" + removed : added));
   $done(result);
 })();
