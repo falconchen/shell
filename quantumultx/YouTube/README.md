@@ -156,17 +156,24 @@ pnpm run test
 
 ## 确认版本
 
-正式版、调试版和合并版每处理一次请求或响应，都在 Quantumult X 的日志里输出一行，可据此确认设备上的脚本是否已更新：
+正式版、调试版和合并版在直接应答或改写内容时，在 Quantumult X 的日志里输出一行，可据此确认设备上的脚本是否已更新：
 
 ```text
-[YouTubeNoAds 1.0.1] request player/ad_break answered
-[YouTubeNoAds 1.0.1] request player changed
-[YouTubeNoAds 1.0.1] response browse pass
+[YouTubeNoAds 1.0.2] request player/ad_break answered
+[YouTubeNoAds 1.0.2] request player changed
+[YouTubeNoAds 1.0.2] response browse changed
 ```
 
-依次是版本、阶段、接口名和结果：`answered` 表示脚本直接应答，`changed` 表示改写了内容，`pass` 表示原样放行。不输出查询参数和正文。
+依次是版本、阶段、接口名和结果：`answered` 表示脚本直接应答，`changed` 表示改写了内容。原样放行的请求不输出，查询参数和正文也不输出。打开 YouTube 首页或播放一个视频就能看到这一行。
 
-版本号在 `loon/YouTube/tools/qx-runtime.js` 的 `VERSION`，片段规则、适配层或固定开关的含义有变化时递增。当前为 1.0.1，对应 `player/ad_break` 改用 `script-echo-response` 之后的构建；此前的构建不输出这一行。
+版本号在 `loon/YouTube/tools/qx-runtime.js` 的 `VERSION`，片段规则、适配层或固定开关的含义有变化时递增。
+
+| 版本 | 变化 |
+| --- | --- |
+| 1.0.2 | 日志只在直接应答或改写内容时输出 |
+| 1.0.1 | `player/ad_break` 改用 `script-echo-response`；开始输出版本日志，每次处理都输出一行 |
+
+1.0.1 之前的构建不输出这一行。
 
 ## 调试版
 
