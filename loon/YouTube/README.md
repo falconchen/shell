@@ -43,8 +43,8 @@ loon/YouTube/
 | 发布文件 | 同阶段未压缩合并字节 | 压缩字节 | 减少 |
 | --- | ---: | ---: | ---: |
 | request.min.js | 292,094 | 163,900 | 43.9% |
-| response.min.js | 353,216 | 195,211 | 44.7% |
-| 合计 | 645,310 | 359,111 | 44.4% |
+| response.min.js | 353,739 | 195,380 | 44.8% |
+| 合计 | 645,833 | 359,280 | 44.4% |
 
 配置、播放器和日志同时服务请求与响应，两份发布包会包含这些源码的各自副本。此表比较同等两个合并入口的压缩前后体积，不能把总压缩体积与仅一份四模块源码直接比较，或将合并本身描述为执行提速。
 
@@ -149,7 +149,7 @@ https://raw.githubusercontent.com/teaoea/shell/main/loon/YouTube/dist/response.m
 
 Protobuf 仅沿已核对的路径处理：BrowseResponse 字段 9 / 10 中的 SectionListRenderer（49399797）及其列表字段 1，删除含 AdSlotRenderer（424701016）或 CompanionAdRenderer（55514441）的整个列表项；`next` 支持 SingleColumnWatchNextResults（51779735）中的 SectionList，以及字段 8 的 WatchNextSecondaryResults continuation（51779776），其列表支持广告位和 CompactPromotedVideoRenderer（73920376）。未知字段保持原字节，只在已修改的外层消息重算长度。`removed` 是被识别的广告字段/JSON 列表项计数，不等同于屏幕上广告的准确条数。
 
-**尚未适配：其他 Tab/列表路径、二进制 search 响应及既没有严格 EML 映射、也没有卡片内 `pagead` 标记的 Elements/EML 卡片。** 当前不会在整条响应的任意字节中搜索“ad”或“Robinhood”并删除，也不根据展示文字猜测卡片性质。这些结构原样通过并保存开发样本。限制为 4 MiB 响应、30,000 个 Protobuf 字段、32 层已知消息路径、20,000 个 JSON 节点和 64 层 JSON 深度；截断、混合 renderer、解析错误或超限时整条原响应通过。
+**尚未适配：其他 Tab/列表路径、二进制 search 续页及既没有严格 EML 映射、也没有卡片内 `pagead` 标记的 Elements/EML 卡片（二进制 search 首屏见下文 2.6.2）。** 当前不会在整条响应的任意字节中搜索“ad”或“Robinhood”并删除，也不根据展示文字猜测卡片性质。这些结构原样通过并保存开发样本。限制为 4 MiB 响应、30,000 个 Protobuf 字段、32 层已知消息路径、20,000 个 JSON 节点和 64 层 JSON 深度；截断、混合 renderer、解析错误或超限时整条原响应通过。
 
 ### iOS 首页 EML 卡片适配（1.1.0）
 
@@ -188,6 +188,30 @@ Protobuf 仅沿已核对的路径处理：BrowseResponse 字段 9 / 10 中的 Se
 2.6.1 增加这一路径。卡片仍按原有的布局、Model 和 `skip_ad_on_block` 三项联合判断；待插入项被确认为广告并整项移除后，连同目标位置删除整条字段 6 指令，其余字段保持原字节。同一条指令里若还有其他列表项，只去掉广告项并保留指令。未登记的布局、其他字段编号和损坏数据原样通过。
 
 对该真实响应离线回放：输出与“只删除这一条字段 6、逐层重算长度”的独立结果逐字节一致（250,164 → 21,764 字节，减少的部分主要是随广告下发的模板库）。只有这一份样本，其他版本或其他插入形式是否使用同一结构未知；删除指令后界面是否留空白，需设备确认。原始响应不提交仓库，回归样本为自行构造的最小协议数据。
+
+### 搜索结果的 Protobuf 广告与 Shorts（2.6.2）
+
+用户在 Quantumult X 版（iPhone 17，iOS 26.6.2，YouTube 21.29.3）上反馈搜索结果页仍有赞助商广告和 Shorts 推荐区。此前二进制 `search` 响应整条放行（`pass: search protobuf schema unsupported`）。
+
+抓取到的一份搜索首屏响应（br 压缩 166,920 字节，解压后 1,301,805 字节）结构如下：顶层字段 4 → SectionList（49399797）→ 列表项（1）。列表项有三种：字段 90823135（未处理）、ItemSectionRenderer（50195462）和 ShelfRenderer（51845067）。与首页不同，一个 ItemSection 内并列放着多个内容项：`cell_divider`、广告和普通视频（`video_lockup_with_attachment`，Model 232954548）交替出现，广告前后各有一个分隔项。
+
+样本含 4 条广告，`skip_ad_on_block` 各出现一次：
+
+| 卡片布局 | Model 字段 | 广告操作路径（从 Model 正文起） | 状态 |
+| --- | --- | --- | --- |
+| `video_display_button_group_layout.eml` | 491441836 | 19 → 8 → 10 → 4 → … | 已登记 |
+| `full_width_square_image_layout.eml` | 461080918 | 55 → 7 → 10 → 4 → … | 已登记 |
+| `video_display_full_buttoned_layout.eml` | 454362329 | 32 → 8 → 10 → 4 → … | 已登记 |
+| `landscape_image_wide_button_layout.eml` | 456430508 | 45 → 7 → 10 → 4 → 169495254 → 138681778 → 2 → 138681066 → 3 → 449330433 | 2.6.2 新增 |
+
+2.6.2 的改动：
+
+- `EDGES` 增加 `search: {4:"sectionUnion"}`，取消对二进制搜索响应的整条放行；卡片仍按布局、唯一 Model 和 `skip_ad_on_block` 三项联合判断。搜索续页没有样本，其他顶层字段保持放行。
+- 登记 `landscape_image_wide_button_layout`。
+- 搜索响应里，同一个 ItemSection 内的广告被删除后，去掉紧随其后的一个已识别 `cell_divider`；广告后面不是分隔项时只删广告。首页的 ItemSection 仍按原规则，不删并列的分隔项。
+- 新增参数 `hide_search_shorts`（默认关闭，主插件没有这一开关，Loon 行为不变）：开启后按与首页相同的 `shortsShelf` 条件删除搜索结果里的 Shorts 推荐区。Quantumult X 版让它跟随 `hide_home_shorts`。
+
+对该真实响应离线回放：`search changed: removed=4 … opaque_elements=31 removed_eml=4 removed_dividers=4 hidden_shorts=2`。仅去广告时输出 583,812 字节，与“在各 ItemSection 中删除含 `skip_ad_on_block` 的内容项及紧随的分隔项、逐层重算长度”的独立结果逐字节一致；同时隐藏 Shorts 时输出 510,543 字节，两个 Shorts 推荐区的列表项消失，39 处普通视频布局引用保留。只有这一份样本；界面效果需设备确认。原始响应不提交仓库，回归样本为自行构造的最小协议数据。
 
 ### 隐藏首页 Shorts（1.2.0）
 

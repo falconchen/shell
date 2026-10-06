@@ -113,6 +113,7 @@ const emlRoutes={
  full_width_square_image_carousel_layout:{model:33562350,route:[5,5,10,4,169495254,138681778,2,138681066,3,449330433]},
  carousel_footered_layout:{model:505359416,route:[31,8,10,4,169495254,138681778,2,138681066,3,449330433]},
  video_display_full_buttoned_layout:{model:454362329,route:[32,8,10,4,169495254,138681778,2,138681066,3,449330433]},
+ landscape_image_wide_button_layout:{model:456430508,route:[45,7,10,4,169495254,138681778,2,138681066,3,449330433]},
  video_display_carousel_button_group_layout:{model:33561652,route:[14,8,10,4,169495254,138681778,2,138681066,3,449330433]},
  banner_text_icon_buttoned_layout:{model:378585263,route:[5,3,4,169495254,138681778,2,138681066,3,449330433]},
  fullscreen_engagement_companion:{model:252081505,route:[13,1,169495254,138681778,2,138681066,3,449330433]},
@@ -396,6 +397,46 @@ test('deferred single-item insert keeps mixed, unverified and malformed inserts 
  // 同一条指令同时带广告项和普通项时只去掉广告项，保留指令和目标位置。
  const mixed=run(wrap(msg(6,cat(msg(1,section(element('video_display_button_group_layout'))),msg(1,normalEml()),position))),{type:'application/x-protobuf'});
  assert.deepEqual(Buffer.from(mixed.output.body),Buffer.from(wrap(msg(6,cat(msg(1,normalEml()),position)))));
+});
+
+// 搜索首屏（真机样本，iOS 21.29.3）：4 → SectionList；一个 ItemSection 内并列放着分隔项、广告和视频，Shorts 推荐区是独立的列表项。
+const searchList=(...items)=>cat(msg(1,text('CONTEXT-KEEP')),msg(4,msg(49399797,cat(...items.map(x=>msg(1,x)),msg(13,text('LIST-KEEP'))))),msg(777,text('REGISTRY-KEEP')));
+const cellDivider=()=>element('cell_divider',{model:347043917,command:false}),videoCell=()=>element('video_lockup_with_attachment',{command:false});
+const searchOptions={endpoint:'search',type:'application/x-protobuf'};
+for (const name of ['video_display_button_group_layout','landscape_image_wide_button_layout','full_width_square_image_layout','video_display_full_buttoned_layout']) test(`search protobuf removes ${name} and the divider after it inside a shared ItemSection`,()=>{
+ const before=searchList(section(cellDivider(),element(name),cellDivider(),videoCell(),videoCell(),cellDivider(),element(name),cellDivider(),videoCell()),section(cellDivider(),videoCell()));
+ const after=searchList(section(cellDivider(),videoCell(),videoCell(),cellDivider(),videoCell()),section(cellDivider(),videoCell()));
+ const result=run(before,searchOptions);
+ assert.deepEqual(Buffer.from(result.output.body),Buffer.from(after));
+ assert.ok(result.logs.some(x=>x.includes('search changed: removed=2')&&x.includes('removed_eml=2')&&x.includes('removed_dividers=2')));
+});
+test('search protobuf keeps unverified cards, lone dividers and other list positions, and drops an all-ad section',()=>{
+ const pass=input=>assert.equal(Object.keys(run(input,searchOptions).output).length,0);
+ pass(searchList(section(cellDivider(),element('landscape_image_wide_button_layout',{command:false}),cellDivider(),videoCell())));
+ pass(searchList(section(cellDivider(),element('landscape_image_wide_button_layout',{model:232954548}),videoCell())));
+ pass(searchList(section(cellDivider(),videoCell(),cellDivider(),cellDivider(),videoCell())));
+ pass(nested([9,49399797],msg(1,section(element('landscape_image_wide_button_layout')))));
+ pass(nested([10,49399797],msg(1,section(element('landscape_image_wide_button_layout')))));
+ // 广告后面不是分隔项时只删广告；整个 ItemSection 只有广告时连同外层列表项删除。
+ assert.deepEqual(Buffer.from(run(searchList(section(videoCell(),element('landscape_image_wide_button_layout'),videoCell(),cellDivider())),searchOptions).output.body),Buffer.from(searchList(section(videoCell(),videoCell(),cellDivider()))));
+ assert.deepEqual(Buffer.from(run(searchList(section(element('landscape_image_wide_button_layout')),section(videoCell())),searchOptions).output.body),Buffer.from(searchList(section(videoCell()))));
+ // 首页列表里的并列分隔项仍按原规则保留。
+ const homeMixed=nested([10,49399797],msg(1,section(element('video_display_button_group_layout'),cellDivider(),videoCell())));
+ assert.deepEqual(Buffer.from(run(homeMixed,{type:'application/x-protobuf'}).output.body),Buffer.from(nested([10,49399797],msg(1,section(cellDivider(),videoCell())))));
+});
+test('search Shorts shelves are hidden only by the separate search switch',()=>{
+ const input=searchList(section(cellDivider(),videoCell()),shortsShelf(shortsCell(),shortsCell()),section(videoCell()),msg(51845067,msg(1,text('Shorts'))));
+ const hidden=searchList(section(cellDivider(),videoCell()),section(videoCell()),msg(51845067,msg(1,text('Shorts'))));
+ const args=flags=>({...searchOptions,extra:{$argument:{script_debug:true,...flags}}});
+ for (const flags of [{},{hide_home_shorts:true},{hide_search_shorts:false,hide_home_shorts:true}]) assert.equal(Object.keys(run(input,args(flags)).output).length,0);
+ for (const flags of [{hide_search_shorts:true},{hide_search_shorts:'true',hide_home_shorts:true}]) {
+  const result=run(input,args(flags));
+  assert.deepEqual(Buffer.from(result.output.body),Buffer.from(hidden));
+  assert.ok(result.logs.some(x=>x.includes('search changed: removed=0')&&x.includes('hidden_shorts=1')));
+ }
+ // 搜索开关不影响首页：首页仍只看首页开关。
+ const homeInput=home(cat(msg(1,shortsShelf(shortsCell())),msg(1,normalEml())));
+ assert.equal(Object.keys(run(homeInput,{type:'application/x-protobuf',extra:{$argument:{script_debug:true,hide_search_shorts:true}}}).output).length,0);
 });
 
 for (const [fieldNo,path,name] of [

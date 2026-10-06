@@ -79,7 +79,7 @@ function ytQXRuntime(phase, options) {
   };
   return {
     request:request, response:response, done:done, store:store,
-    argument:{log_enabled:false, background_playback:options.background_playback === true, hide_home_shorts:options.hide_home_shorts === true, playback_region:String(options.playback_region || "original"), script_debug:options.script_debug === true}
+    argument:{log_enabled:false, background_playback:options.background_playback === true, hide_home_shorts:options.hide_home_shorts === true, hide_search_shorts:options.hide_home_shorts === true, playback_region:String(options.playback_region || "original"), script_debug:options.script_debug === true}
   };
 }
 

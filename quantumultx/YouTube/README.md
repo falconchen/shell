@@ -20,10 +20,10 @@
 | 播放器请求的广告协商字段清理（`player`、`get_watch`） | 固定启用 |
 | `player/ad_break` 直接返回空 Protobuf | 固定启用 |
 | 播放器响应的广告位清理 | 固定启用 |
-| 首页、推荐、搜索的赞助卡片清理 | 固定启用 |
+| 首页、推荐、搜索的赞助卡片清理 | 固定启用；搜索结果的 Protobuf 响应自 YouTubeFeed 2.6.2 起支持，只覆盖搜索首屏 |
 | Shorts 播放广告清理 | 固定启用 |
 | 初始化 POST 返回空白视频（对应 Loon 的 `reject_video(200)`） | 固定启用 |
-| 后台播放、隐藏首页 Shorts、播放请求地区 | 构建时由 `options.json` 决定；当前后台播放和隐藏首页 Shorts 已开启，地区保持 `original` |
+| 后台播放、隐藏首页 Shorts、播放请求地区 | 构建时由 `options.json` 决定；当前后台播放和隐藏首页 Shorts 已开启，地区保持 `original`。`hide_home_shorts` 在本版本同时隐藏搜索结果里的 Shorts 推荐区 |
 | 日志工具、Onesie 配置缓存、媒体采样 | 未移植 |
 
 ## 安装

@@ -1,7 +1,7 @@
 /**
  * 文件：YouTubeFeed.js
  * 功能：清理首页与推荐信息流广告，并按开关隐藏首页 Shorts 推荐区。
- * 版本：2.6.1
+ * 版本：2.6.2
  * 更新时间：2026-10-06
  * 运行环境：Loon JavaScript
  */
@@ -216,7 +216,7 @@ function(k){if(v[k]!==undefined)out[k]=v[k];});if(v.url)out.url=url(v.url);if(v.
  */
 (function () {
   "use strict";
-  var VERSION = "2.6.1";
+  var VERSION = "2.6.2";
   var MAX_FIELDS = 30000;
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_JSON_NODES = 20000;
@@ -225,6 +225,8 @@ function(k){if(v[k]!==undefined)out[k]=v[k];});if(v.url)out.url=url(v.url);if(v.
   if (typeof args.capture_raw === "undefined") args.capture_raw = args.log_enabled;
   var debug = args.script_debug === true || args.script_debug === "true";
   var hideHomeShorts = args.hide_home_shorts === true || args.hide_home_shorts === "true";
+  // 独立于首页开关：主插件没有这一参数，默认不处理搜索结果里的 Shorts；Quantumult X 版让它跟随首页开关。
+  var hideSearchShorts = args.hide_search_shorts === true || args.hide_search_shorts === "true";
   var adaptiveFeedAds = args.adaptive_feed_ads !== false && args.adaptive_feed_ads !== "false";
   var endpoint = "unknown";
   var API = /^https:\/\/(?:youtubei(?:-att)?\.googleapis\.com|(?:www\.|m\.|music\.)?youtube\.com)\/youtubei\/v1\/(browse|next|search)(?:\?[^#]*)?$/i;
@@ -592,6 +594,7 @@ function (key) { try { $persistentStore.write(undefined, key); } catch (_) {} })
   var EDGES = {
     browse: {9:"browseUnion", 10:"continuationUnion"},
     next: {7:"nextUnion", 8:"continuationUnion"},
+    search: {4:"sectionUnion"},
     browseUnion: {49399797:"sectionList", 58173949:"browseColumns", 153515154:"opaqueElement"},
     browseColumns: {1:"tabUnion"},
     tabUnion: {58174010:"tab"}, tab: {4:"sectionUnion"},
@@ -614,6 +617,7 @@ function (key) { try { $persistentStore.write(undefined, key); } catch (_) {} })
     "full_width_square_image_carousel_layout": {model:33562350, command:[5,5,10,4,169495254,138681778,2,138681066,3,449330433]},
     "carousel_footered_layout": {model:505359416, command:[31,8,10,4,169495254,138681778,2,138681066,3,449330433]},
     "video_display_full_buttoned_layout": {model:454362329, command:[32,8,10,4,169495254,138681778,2,138681066,3,449330433]},
+    "landscape_image_wide_button_layout": {model:456430508, command:[45,7,10,4,169495254,138681778,2,138681066,3,449330433]},
     "video_display_carousel_button_group_layout": {model:33561652, command:[14,8,10,4,169495254,138681778,2,138681066,3,449330433]},
     "banner_text_icon_buttoned_layout": {model:378585263, command:[5,3,4,169495254,138681778,2,138681066,3,449330433]},
     "fullscreen_engagement_companion": {model:252081505, command:[13,1,169495254,138681778,2,138681066,3,449330433]},
@@ -965,7 +969,7 @@ function (r) {
            (r.no === 42 && watchNextAdCompanion(bytes.subarray(r.payloadStart, r.end), [357104971,2,361256913,1,138681066,2,194605894,1], budget)))) {
         removed++; eml++; return;
       }
-      if (hideHomeShorts && endpoint === "browse" && homeContext && kind === "sectionItem" && r.no === 51845067) {
+      if (((hideHomeShorts && endpoint === "browse" && homeContext) || (hideSearchShorts && endpoint === "search")) && kind === "sectionItem" && r.no === 51845067) {
         if (r.wire !== 2) fail("shorts-shelf-schema-mismatch");
         if (shortsShelf(bytes.subarray(r.payloadStart, r.end), budget) && !records.some(
 /**
@@ -1006,7 +1010,8 @@ function (other) {return other.no >= 1000000 && other.no !== 153515154;})) fail(
         listCount++;
         if (result.drop) {pendingAd = result.removed > 0; return;}
 
-        if (kind !== "itemSection" && pendingAd && result.divider) {dividers++; pendingAd = false; return;}
+        // 搜索结果把广告和分隔项并列放在同一个 ItemSection 里，删除广告后同样去掉紧随的一个分隔项。
+        if ((kind !== "itemSection" || endpoint === "search") && pendingAd && result.divider) {dividers++; pendingAd = false; return;}
         pendingAd = false; keptListCount++;
         if (kind === "itemSection") divider = listCount === 1 && result.divider;
       }
@@ -1278,7 +1283,6 @@ function (entry) {
       }
     } else {
       if (!bytes || !/^(?:application\/(?:x-protobuf|protobuf|vnd\.google\.protobuf|octet-stream))$/.test(type)) {log("pass: unsupported content type"); return {};}
-      if (endpoint === "search") {log("pass: search protobuf schema unsupported"); return {};}
       result = cleanProto(bytes, endpoint, {fields:0}, 0, requestHome());
     }
     log((result.removed || result.shorts ? "changed" : "pass") + ": removed=" + result.removed + " adaptive_removed=" + (result.adaptive || 0) + " format=" + (json || typeof body === "string" ? "json" : "protobuf") + " opaque_elements=" + result.opaque + " removed_eml=" + (result.eml || 0) + " removed_dividers=" + (result.dividers || 0) + " hidden_shorts=" + (result.shorts || 0));
