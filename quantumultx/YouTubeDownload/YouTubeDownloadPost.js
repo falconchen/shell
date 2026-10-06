@@ -5,7 +5,7 @@
  * 版本：0.3.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-echo-response；与 YouTubeDownloadMenu.js 配套，不依赖去广告脚本。
- * 状态：实验。0.2.0 的浏览器表单提交已在设备上确认可用；本版改为脚本提交，尚未在设备上验证。
+ * 状态：实验。脚本代为提交已在设备上使用（iPhone 17，iOS 26.6.2，YouTube 21.29.3），用户反馈基本可用。
  */
 (function () {
   "use strict";

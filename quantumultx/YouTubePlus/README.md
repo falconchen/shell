@@ -20,11 +20,13 @@ https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubePlus/
 
 ## 行为
 
-- `browse`、`search`、`next` 的 Protobuf 响应经过两步处理；`player`、`get_watch`、Shorts 及 JSON 响应与去广告版完全相同。
+- `browse`、`search`、`next`、`get_watch` 的 Protobuf 响应经过两步处理；`player`、Shorts 及 JSON 响应与去广告版完全相同。
 - 两步互相独立：一步没有改动或放行时，另一步的结果照常生效；都没有改动时响应原样放行。
-- 重写记录里这三类条目各有一行 `[YouTubeDownloadMenu x.y.z] 接口名 added=N removed=M`，N 为加了菜单的视频卡片数，M 为移除的原有菜单项数。
-- 下载菜单仍是实验功能，覆盖首页、搜索首屏和播放页推荐列表的视频卡片，下载站地址见 `YouTubeDownloadMenu.js`。
+- 重写记录里这四类条目各有一行 `[YouTubeDownloadMenu x.y.z] 接口名 added=N removed=M sheet=K`：N 为加了菜单的视频卡片数，M 为移除的原有菜单项数，K 为改写的当前视频“⋯”面板数。
+- 下载菜单覆盖首页、搜索首屏、播放页推荐列表的视频卡片，以及播放页当前视频的“⋯”面板；下载站地址见 `YouTubeDownloadMenu.js`。
 
 ## 验证
 
-测试核对：合并版对首页响应的输出，与“先运行去广告版、再把结果交给独立菜单脚本”的输出逐字节一致；其余接口与去广告版逐字节一致。合并版尚未在设备上验证。
+测试核对：合并版对首页响应的输出，与“先运行去广告版、再把结果交给独立菜单脚本”的输出逐字节一致；其余接口与去广告版逐字节一致。
+
+设备反馈（2026-10-06，iPhone 17，iOS 26.6.2，YouTube 21.29.3）：合并版下，首页、搜索首屏的广告和 Shorts 推荐区被清理，首页、搜索首屏、播放页推荐列表的视频菜单和当前视频的“⋯”面板均出现“下载视频”“下载音频”，图标正常。搜索续页尚未处理。
