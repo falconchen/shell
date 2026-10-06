@@ -69,7 +69,7 @@ test('home response is cleaned first and then gets the download menu', () => {
   assert.ok(!body.includes(Buffer.from(adSlot)) && body.includes(Buffer.from(plain)));
   assert.equal(body.toString('latin1').split('192.168.6.7:5100/?url=').length - 1, 4);
   assert.ok(body.length !== out(run(noAds, 'browse', proto(input)), input).length && body.length !== out(run(menuOnly, 'browse', proto(input)), input).length);
-  assert.ok(result.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] browse added=2$/.test(line)));
+  assert.ok(result.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] browse added=2 removed_native=0$/.test(line)));
 });
 
 test('each half still works when the other has nothing to do', () => {
