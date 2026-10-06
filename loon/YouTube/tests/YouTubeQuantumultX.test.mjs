@@ -69,17 +69,19 @@ const plain = value => JSON.parse(JSON.stringify(value));
 
 test('snippet binds each rule to the matching script type and published bundle', () => {
   const rules = snippet.split('\n').filter(line => line && !line.startsWith('#') && !line.startsWith('hostname'));
-  assert.equal(rules.length, 3);
-  const [request, response, init] = rules.map(line => {const [pattern, url, type, path] = line.split(' '); assert.equal(url, 'url'); return {regex:new RegExp(pattern), type, path};});
+  assert.equal(rules.length, 4);
+  const [adBreak, request, response, init] = rules.map(line => {const [pattern, url, type, path] = line.split(' '); assert.equal(url, 'url'); return {regex:new RegExp(pattern), type, path};});
   const base = 'https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/dist/';
+  assert.deepEqual([adBreak.type, adBreak.path], ['script-echo-response', base + 'request.min.js']);
   assert.deepEqual([request.type, request.path], ['script-request-body', base + 'request.min.js']);
   assert.deepEqual([response.type, response.path], ['script-response-body', base + 'response.min.js']);
   assert.deepEqual([init.type, init.path], ['script-request-header', base + 'request.min.js']);
-  for (const name of ['player', 'get_watch', 'player/ad_break']) assert.ok(request.regex.test(api + name + '?prettyPrint=false'));
+  for (const name of ['player', 'get_watch']) assert.ok(request.regex.test(api + name + '?prettyPrint=false') && !adBreak.regex.test(api + name + '?prettyPrint=false'));
+  for (const url of [api + 'player/ad_break', api + 'player/ad_break?prettyPrint=false', 'https://www.youtube.com/youtubei/v1/player/ad_break']) assert.ok(adBreak.regex.test(url) && !request.regex.test(url));
   for (const name of ['browse', 'next', 'search', 'player', 'get_watch', 'reel/reel_watch_sequence']) assert.ok(response.regex.test('https://www.youtube.com/youtubei/v1/' + name));
   assert.ok(!request.regex.test(api + 'browse') && !response.regex.test(api + 'player/ad_break') && !response.regex.test(api + 'log_event'));
   assert.ok(init.regex.test('https://rr5---sn-abc.googlevideo.com/initplayback?id=1'));
-  for (const rule of [request, response, init]) assert.ok(!rule.regex.test('https://rr5---sn-abc.googlevideo.com/videoplayback?ctier=L'));
+  for (const rule of [adBreak, request, response, init]) assert.ok(!rule.regex.test('https://rr5---sn-abc.googlevideo.com/videoplayback?ctier=L'));
   const hosts = snippet.split('\n').find(line => line.startsWith('hostname = ')).slice(11).split(', ');
   assert.deepEqual(hosts, ['youtubei.googleapis.com', 'youtubei-att.googleapis.com', 'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', '*.googlevideo.com']);
 });
@@ -119,7 +121,8 @@ test('JSON player request uses the string body without a UTF-8 decoder', () => {
   assert.deepEqual(plain(output), plain({headers:expected.headers, body:expected.body}));
 });
 
-test('ad_break request is answered directly with an empty 200 protobuf response', () => {
+test('ad_break echo rule is answered with an empty 200 protobuf response, with or without a request body', () => {
+  assert.deepEqual(plain(runQX('request', {url:api + 'player/ad_break', method:'POST', headers:{}})), {status:'HTTP/1.1 200 OK', headers:{'Content-Type':'application/x-protobuf', 'Cache-Control':'no-store'}, body:''});
   const output = runQX('request', {url:api + 'player/ad_break', method:'POST', headers:{}, bodyBytes:buffer(u8([10, 0]))});
   assert.deepEqual(plain(output), {status:'HTTP/1.1 200 OK', headers:{'Content-Type':'application/x-protobuf', 'Cache-Control':'no-store'}, body:''});
 });
@@ -179,7 +182,7 @@ test('debug variant differs from the release build only by script paths and the 
   const debugSnippet = read('YouTubeNoAds.debug.snippet', qxRoot);
   const rules = value => value.split('\n').filter(line => line && !line.startsWith('#'));
   assert.deepEqual(rules(debugSnippet), rules(snippet).map(line => line.replace(/\/dist\/(request|response)\.min\.js/, '/dist/$1.debug.min.js')));
-  assert.equal(rules(debugSnippet).filter(line => line.includes('.debug.min.js')).length, 3);
+  assert.equal(rules(debugSnippet).filter(line => line.includes('.debug.min.js')).length, 4);
   const request = {url:api + 'browse', method:'POST', headers:{}}, response = {statusCode:200, headers:{'Content-Type':'application/json'}, body:'{"contents":{}}'};
   for (const phase of ['request', 'response']) {
     const debug = read(`dist/${phase}.debug.min.js`, qxRoot), body = code => code.slice(code.indexOf('\n'));
