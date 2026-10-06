@@ -1,8 +1,8 @@
 /**
  * 文件：YouTubeDownloadMenu.js
  * 功能：在 YouTube 首页视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
- *       同时移除 App 自带的离线下载条目。
- * 版本：0.4.0
+ *       同时移除 REMOVE 中列出的原有条目（自带下载、投放、加入队列、稍后观看、举报）。
+ * 版本：0.5.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
  * 状态：实验。结构取自 YouTube iOS 21.29.3 的一份首页续页响应，尚未在设备上验证。
@@ -15,11 +15,16 @@
   // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
   // 该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致；147（OFFLINE_DOWNLOAD）已在设备上确认显示为向下箭头。
   var ITEMS = [{label:"下载视频", icon:658, type:"video"}, {label:"下载音频", icon:21, type:"audio"}];
-  var VERSION = "0.4.0";
-  // 是否移除 App 自带的“下载视频”。服务器下发的菜单里没有这四个字：样本中位于“保存到播放列表”和“分享”之间的条目
-  // 是 MenuServiceItemRenderer（66441155），命令为 73080600（带视频编号），图标 57（OFFLINE_ADD），文字为“立即保存”，
-  // 位置与 App 显示“下载视频”的位置一致，推断由 App 按离线状态改写文字。该对应关系没有公开定义佐证。
-  var REMOVE_NATIVE_DOWNLOAD = true;
+  var VERSION = "0.5.0";
+  // 要从菜单里移除的原有条目。按条目类型加命令编号或图标编号识别，不依赖界面语言；删掉某一行即可保留对应条目。
+  // 自带下载：服务器下发的文字是“立即保存”，App 显示为“下载视频”；该对应关系已在设备上确认（移除后“下载视频”消失）。
+  var REMOVE = [
+    {renderer:66441155, command:73080600},  // App 自带的“下载视频”
+    {renderer:77258115, icon:242},          // 在其他设备上播放（CAST_ICON；样本中有两个命令不同的变体）
+    {renderer:77258115, command:1610},      // 加入队列，接下来就播放 / 最后播放
+    {renderer:66441155, command:60666189},  // 保存到“稍后观看”
+    {renderer:66441155, command:113762617}  // 举报
+  ];
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_FIELDS = 60000;
   // 首页首屏与续页中 SectionList 的位置，以及从列表项到视频卡片数据、再到菜单的固定路径。
@@ -164,14 +169,24 @@
   }
   var added = 0, removed = 0;
   /**
-   * 功能：判断菜单条目是否为 App 自带的离线下载项：MenuServiceItemRenderer（66441155）的命令（字段 3）含 73080600。
+   * 功能：判断菜单条目是否在 REMOVE 列表中：条目类型相符，且命令（字段 3）含指定编号，或图标（字段 2 → 1）为指定编号。
    * 更新时间：2026-10-06
    * @param {Uint8Array} item 菜单列表中一个字段 1 的内容。
-   * @returns {boolean} 是否为离线下载项。
+   * @returns {boolean} 是否应移除。
    */
-  function nativeDownload(item) { return !!find(item, [66441155, 3, 73080600]); }
+  function unwanted(item) {
+    for (var i = 0; i < REMOVE.length; i++) {
+      var rule = REMOVE[i], renderer = find(item, [rule.renderer]);
+      if (!renderer) continue;
+      if (rule.command && find(renderer, [3, rule.command])) return true;
+      if (!rule.icon) continue;
+      var icon = find(renderer, [2]), records = icon ? parse(icon) : [];
+      for (var j = 0; j < records.length; j++) if (records[j].no === 1 && records[j].wire === 0 && varint(icon, records[j].payloadStart).value === rule.icon) return true;
+    }
+    return false;
+  }
   /**
-   * 功能：在菜单第一个条目之前加入下载项，并按开关去掉 App 自带的离线下载项；菜单为空或已含指向下载站的条目时不改动。
+   * 功能：在菜单第一个条目之前加入下载项，并去掉 REMOVE 列出的原有条目；菜单为空或已含指向下载站的条目时不改动。
    * 更新时间：2026-10-06
    * @param {Uint8Array} menu MenuRenderer（66439850）消息。
    * @param {string} videoId 视频编号。
@@ -189,7 +204,7 @@
     var parts = [];
     records.forEach(function (record, index) {
       if (index === first) ITEMS.forEach(function (item) { parts.push(menuItem(videoId, item)); });
-      if (REMOVE_NATIVE_DOWNLOAD && record.no === 1 && record.wire === 2 && nativeDownload(menu.subarray(record.payloadStart, record.end))) { removed++; return; }
+      if (record.no === 1 && record.wire === 2 && unwanted(menu.subarray(record.payloadStart, record.end))) { removed++; return; }
       parts.push(menu.subarray(record.start, record.end));
     });
     added++;
@@ -253,6 +268,6 @@
   var result = {};
   try { result = run(); }
   catch (error) { result = {}; added = "error:" + (error && error.message || "unknown"); }
-  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] browse " + (typeof added === "number" ? "added=" + added + " removed_native=" + removed : added));
+  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] browse " + (typeof added === "number" ? "added=" + added + " removed=" + removed : added));
   $done(result);
 })();

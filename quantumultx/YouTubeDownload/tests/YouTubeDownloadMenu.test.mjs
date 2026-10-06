@@ -61,7 +61,7 @@ for (const [name, wrap] of [['continuation', continuation], ['initial home', hom
   const after = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(added('AAAAAAAAAAA'), ...items('AAAAAAAAAAA', false)), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(added('BBBB-BBB_BB'), ...items('BBBB-BBB_BB', false)))));
   const result = run(before);
   assert.deepEqual(bytes(result), Buffer.from(after));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.4.0] browse added=2 removed_native=2']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.5.0] browse added=2 removed=2']);
   // 已含同名条目的菜单不重复添加。
   untouched(run(after));
 });
@@ -79,6 +79,20 @@ test('video id falls back to the menu save command and invalid ids leave the car
   untouched(run(continuation(cat(divider, divider))));
   // App 自带的同名条目不影响添加，判断依据是条目是否指向下载站。
   assert.deepEqual(bytes(run(continuation(card(tap('DDDDDDDDDDD'), menu(service('下载视频')))))), Buffer.from(continuation(card(tap('DDDDDDDDDDD'), menu(added('DDDDDDDDDDD'), service('下载视频'))))));
+});
+
+test('listed native items are removed by type plus command or icon, and look-alikes stay', () => {
+  const entry = (renderer, name, icon, endpoint) => msg(1, msg(renderer, cat(label(name), msg(2, cat([8], v(icon))), msg(3, endpoint))));
+  const cast = entry(77258115, '在其他设备上播放', 242, msg(1892, [8, 1])), castOther = entry(77258115, '在其他设备上播放', 242, msg(138681778, [8, 1]));
+  const next = entry(77258115, '加入队列，接下来就播放', 251, msg(1610, [8, 1])), last = entry(77258115, '加入队列，最后播放', 895, msg(1610, [8, 2]));
+  const later = entry(66441155, '保存到“稍后观看”', 59, msg(60666189, [8, 1])), report = entry(66441155, '举报', 52, msg(113762617, msg(1, text('PARAMS'))));
+  const playlist = entry(66441108, '保存到播放列表', 566, msg(443434441, [8, 1])), share = entry(66441108, '分享', 100, msg(90650344, [8, 1]));
+  // 类型或编号只对上一半的条目保留：图标相同但类型不同、命令编号相同但类型不同、同类型的其他图标和命令。
+  const keep = [entry(66441155, '同图标的服务项', 242, msg(65153809, [8, 1])), entry(66441108, '同命令的导航项三', 52, msg(113762617, [8, 1])), entry(66441108, '同命令的导航项', 251, msg(1610, [8, 1])), entry(66441108, '同命令的导航项二', 59, msg(60666189, [8, 1])),
+    entry(77258115, '同类型的其他项', 243, msg(1611, [8, 1])), msg(1, msg(77258115, label('没有图标和命令')))];
+  const result = run(continuation(card(tap('FFFFFFFFFFF'), menu(cast, castOther, next, last, later, playlist, save('FFFFFFFFFFF'), share, ...keep, service('不感兴趣'), report))));
+  assert.deepEqual(bytes(result), Buffer.from(continuation(card(tap('FFFFFFFFFFF'), menu(added('FFFFFFFFFFF'), playlist, share, ...keep, service('不感兴趣'))))));
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.5.0] browse added=1 removed=7']);
 });
 
 test('unexpected responses pass through', () => {
