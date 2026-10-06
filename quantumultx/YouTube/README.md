@@ -33,7 +33,6 @@
 | Shorts 播放广告清理 | 固定启用 |
 | 初始化 POST 返回空白视频（对应 Loon 的 `reject_video(200)`） | 固定启用 |
 | 后台播放、隐藏首页 Shorts、播放请求地区 | 构建时由 `options.json` 决定；当前后台播放和隐藏首页 Shorts 已开启，地区保持 `original`。`hide_home_shorts` 在本版本同时隐藏搜索结果里的 Shorts 推荐区 |
-| 字幕自动翻译（`/api/timedtext` 加 `tlang`） | 构建时由 `options.json` 决定；当前开启，目标简体中文。自 1.0.3 起加入，尚未在设备上确认 |
 | 日志工具、Onesie 配置缓存、媒体采样 | 未移植 |
 
 ## 安装
@@ -150,13 +149,9 @@ Quantumult X 的重写片段没有插件参数界面，开关写在 `options.jso
 {
   "background_playback": true,
   "hide_home_shorts": true,
-  "playback_region": "original",
-  "translation_enabled": true,
-  "translation_target": "zh-CN"
+  "playback_region": "original"
 }
 ```
-
-`translation_enabled` 是字幕自动翻译的开关，`translation_target` 可选 `zh-CN`（简体中文）或 `en-US`（英语）。
 
 `playback_region` 可选 `original`、`CN`、`HK`、`TW`、`US`、`JP`、`KR`、`SG`、`GB`、`DE`、`RU`。修改后在 `loon/YouTube/` 重新构建并推送：
 
@@ -167,32 +162,6 @@ pnpm run test
 ```
 
 `dist/` 由构建生成，不手工修改。
-
-## 字幕自动翻译
-
-YouTube 服务器能把已有字幕机器翻译成其他语言：字幕请求 `/api/timedtext` 带上 `tlang=zh-Hans` 时，返回的就是简体中文字幕。App 里要手动选「自动翻译」才会带这个参数，而且部分视频的菜单里没有简体中文。
-
-脚本在请求阶段给字幕地址加上或改写 `tlang`，其余参数原样保留；翻译由 YouTube 服务器完成，脚本不读取、不修改、不保存字幕正文。模块 `src/YouTubeTranslation.js` 取自上游 teaoea/shell，未改动。
-
-下列情况原样放行：
-
-- 字幕本身已是目标语言；
-- 地址的签名参数 `sparams` 覆盖了 `tlang`，改动会导致验签失败；
-- 请求不是 GET，或地址里没有可识别的原语言。
-
-**效果和限制。**
-
-- 视频要有字幕轨道（包括自动生成的），没有字幕的视频不受影响。
-- 字幕菜单显示的仍是原语言，只有内容变成目标语言。
-- 开启后所有非目标语言的字幕都会被翻译，包括你手动选择的其他语言。要看原文需关闭开关并重新构建。
-
-**验证情况。** 2026-10-07 在电脑网页端确认：一个 App 菜单里没有简体中文的视频（英语自动生成字幕），字幕请求加上 `tlang=zh-Hans` 后服务器返回简体中文。以下三点尚未在设备上确认：
-
-- YouTube iOS App 是否经 `www.youtube.com/api/timedtext` 取字幕；
-- App 的字幕请求被改写后是否仍被服务器接受；
-- Quantumult X 是否按 `$done({path})` 改写请求地址。
-
-生效时日志出现 `[YouTubeNoAds 1.0.3] request timedtext changed`。开了字幕却没有这一行，说明 App 没有走这个地址，或请求属于上面的放行情况。字幕不显示时，把 `translation_enabled` 改为 `false` 重新构建。
 
 ## 确认版本
 
@@ -210,7 +179,6 @@ YouTube 服务器能把已有字幕机器翻译成其他语言：字幕请求 `/
 
 | 版本 | 变化 |
 | --- | --- |
-| 1.0.3 | 加入字幕自动翻译，默认开启，目标简体中文 |
 | 1.0.2 | 日志只在直接应答或改写内容时输出 |
 | 1.0.1 | `player/ad_break` 改用 `script-echo-response`；开始输出版本日志，每次处理都输出一行 |
 

@@ -1,7 +1,5 @@
 {
   "background_playback": true,
   "hide_home_shorts": true,
-  "playback_region": "original",
-  "translation_enabled": true,
-  "translation_target": "zh-CN"
+  "playback_region": "original"
 }

@@ -7,7 +7,7 @@
  */
 function ytQXRuntime(phase, options) {
   // Quantumult X 发布包的版本；片段规则、适配层或固定开关的含义有变化时递增，用于在日志中确认设备已更新。
-  var VERSION = "1.0.3";
+  var VERSION = "1.0.2";
   var nativeDone = $done;
   var hasResponse = typeof $response !== "undefined" && !!$response;
   if (typeof $request === "undefined" || !$request || (phase === "response") !== hasResponse) { nativeDone({}); return null; }
@@ -58,8 +58,8 @@ function ytQXRuntime(phase, options) {
   function done(output) {
     var result = {};
     if (typeof console !== "undefined") {
-      var name = /\/youtubei\/v1\/([a-z_\/]+)(?:\?|$)/i.exec(String($request.url || "")) || /\.googlevideo\.com\/(initplayback)(?:\?|$)/i.exec(String($request.url || "")) || /\/api\/(timedtext)\?/i.exec(String($request.url || ""));
-      var state = !output || typeof output !== "object" ? "pass" : output.response ? "answered" : output.headers || output.url || Object.prototype.hasOwnProperty.call(output, "body") ? "changed" : "pass";
+      var name = /\/youtubei\/v1\/([a-z_\/]+)(?:\?|$)/i.exec(String($request.url || "")) || /\.googlevideo\.com\/(initplayback)(?:\?|$)/i.exec(String($request.url || ""));
+      var state = !output || typeof output !== "object" ? "pass" : output.response ? "answered" : output.headers || Object.prototype.hasOwnProperty.call(output, "body") ? "changed" : "pass";
       if (state !== "pass") console.log("[YouTubeNoAds " + VERSION + "] " + phase + " " + (name ? name[1] : "unknown") + " " + state);
     }
     if (output && typeof output === "object") {
@@ -69,11 +69,6 @@ function ytQXRuntime(phase, options) {
         result.headers = output.response.headers || {};
         setBody(result, output.response.body);
       } else {
-        // Quantumult X 以 path 改写请求地址，只接受同一来源下的新路径和查询串；来源不同时放行原请求。
-        if (typeof output.url === "string") {
-          var from = /^(https?:\/\/[^\/?#]+)/i.exec(String($request.url || "")), to = /^(https?:\/\/[^\/?#]+)(\/[^#]*)$/i.exec(output.url);
-          if (from && to && from[1].toLowerCase() === to[1].toLowerCase()) result.path = to[2];
-        }
         if (output.headers) result.headers = output.headers;
         if (Object.prototype.hasOwnProperty.call(output, "body")) setBody(result, output.body);
       }
@@ -91,7 +86,7 @@ function ytQXRuntime(phase, options) {
   };
   return {
     request:request, response:response, done:done, store:store,
-    argument:{log_enabled:false, background_playback:options.background_playback === true, hide_home_shorts:options.hide_home_shorts === true, hide_search_shorts:options.hide_home_shorts === true, playback_region:String(options.playback_region || "original"), translation_enabled:options.translation_enabled === true, translation_target:String(options.translation_target || "zh-CN"), script_debug:options.script_debug === true}
+    argument:{log_enabled:false, background_playback:options.background_playback === true, hide_home_shorts:options.hide_home_shorts === true, hide_search_shorts:options.hide_home_shorts === true, playback_region:String(options.playback_region || "original"), script_debug:options.script_debug === true}
   };
 }
 
