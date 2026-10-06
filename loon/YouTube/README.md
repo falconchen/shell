@@ -181,7 +181,7 @@ Protobuf 仅沿已核对的路径处理：BrowseResponse 字段 9 / 10 中的 Se
 
 ### 停留后插入的单项广告（2.6.1）
 
-用户在 Quantumult X 版（YouTube iOS 21.29.3）上反馈：首页初始列表没有广告，下滑后停在某条视频上，下方有一定概率突然插入一条赞助卡片。调试输出显示对应的 `browse` 响应为 `pass: removed=0 opaque_elements=0`，即脚本没有进入其中的卡片。
+用户在 Quantumult X 版（iPhone 17，iOS 26.6.2，YouTube 21.29.3）上反馈：首页初始列表没有广告，下滑后停在某条视频上，下方有一定概率突然插入一条赞助卡片。调试输出显示对应的 `browse` 响应为 `pass: removed=0 opaque_elements=0`，即脚本没有进入其中的卡片。
 
 抓取到的该条响应中，广告卡片本身是已登记的 `video_display_button_group_layout.eml`（Model 491441836，`skip_ad_on_block` 路径与上表一致），但外层是此前未处理的插入指令：`10 → SectionList（49399797）→ 32 → 1 → 6`，字段 6 含待插入的列表项（字段 1，`ItemSectionRenderer` 包装）和目标位置（字段 2，样本为 `item_27_…` 键）。此前只支持 `32 → 1 → 1` 的延迟列表。
 
