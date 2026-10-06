@@ -2,10 +2,11 @@
  * 文件：YouTubeDownloadMenu.js
  * 功能：在 YouTube 首页、搜索结果页和播放页推荐列表视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
  *       同时移除 REMOVE 中列出的原有条目（自带下载、投放、加入队列、稍后观看、举报）。
- * 版本：0.7.0
+ * 版本：0.8.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
- * 状态：实验。结构取自 YouTube iOS 21.29.3 的首页续页、搜索首屏和播放页推荐响应各一份；首页和搜索首屏的菜单已在设备上确认，播放页尚未验证。
+ * 状态：实验。结构取自 YouTube iOS 21.29.3 的首页续页、搜索首屏、播放页推荐续页（next）和播放页首屏（get_watch）响应；
+ *       首页、搜索首屏和播放页推荐续页的菜单已在设备上确认，播放页首屏尚未验证。
  */
 (function () {
   "use strict";
@@ -15,7 +16,7 @@
   // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
   // 该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致；147（OFFLINE_DOWNLOAD）已在设备上确认显示为向下箭头。
   var ITEMS = [{label:"下载视频", icon:658, type:"video"}, {label:"下载音频", icon:21, type:"audio"}];
-  var VERSION = "0.7.0";
+  var VERSION = "0.8.0";
   // 要从菜单里移除的原有条目。按条目类型加命令编号或图标编号识别，不依赖界面语言；删掉某一行即可保留对应条目。
   // 自带下载：服务器下发的文字是“立即保存”，App 显示为“下载视频”；该对应关系已在设备上确认（移除后“下载视频”消失）。
   var REMOVE = [
@@ -31,9 +32,13 @@
   // 播放页样本的推荐列表在字段 8；字段 7 → 51779735 → 1 / 8 是去广告源码登记的播放页首屏位置，没有样本，按同样的卡片路径处理。
   var LISTS = {browse:[[9, 58173949, 1, 58174010, 4, 49399797], [10, 49399797]], search:[[4, 49399797]],
     next:[[8, 49399797], [7, 51779735, 1, 49399797], [7, 51779735, 8, 49399797]]};
-  var endpoint = /\/youtubei\/v1\/(browse|search|next)(?:\?[^#]*)?$/i.exec(typeof $request !== "undefined" && $request ? String($request.url || "") : "");
+  var endpoint = /\/youtubei\/v1\/(browse|search|next|get_watch)(?:\?[^#]*)?$/i.exec(typeof $request !== "undefined" && $request ? String($request.url || "") : "");
   endpoint = endpoint ? endpoint[1].toLowerCase() : "";
   var CARD = [1, 50195462, 1, 153515154, 172660663, 1, 168777401, 5, 232954548, 18];
+  // 播放页首屏由 get_watch 下发：响应是若干个字段 1 的分段，页面内容在分段的字段 3，其中的推荐列表与 next 首屏位置相同。
+  LISTS.get_watch = [[1, 3, 7, 51779735, 1, 49399797], [1, 3, 7, 51779735, 8, 49399797]];
+  // get_watch 里同一批推荐视频还有一份放在字段 14 的面板中，卡片直接挂在面板下，没有 ItemSection 包装；这里给出到卡片数据的完整路径。
+  var PANELS = {get_watch:[[1, 3, 14, 78882851, 3, 29209665, 2, 153515154, 172660663, 1, 168777401, 5, 232954548, 18]]};
   var MENU = [5, 169495254, 98150882, 1, 66439850];
   // 视频编号的来源：卡片点击命令里的 watchEndpoint（48687757）字段 1，首页和搜索多一层 200453700，播放页推荐没有这一层；
   // 都缺失时取菜单“立即保存”命令（73080600）字段 1。
@@ -265,6 +270,9 @@
     var output = body;
     (LISTS[endpoint] || []).forEach(function (list) {
       output = edit(output, list, function (section) { return edit(section, CARD, patchCard); });
+    });
+    (PANELS[endpoint] || []).forEach(function (panel) {
+      output = edit(output, panel, patchCard);
     });
     if (output === body) return {};
     return {bodyBytes:output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength)};

@@ -102,12 +102,26 @@ test('watch page recommendations are cleaned and get the download menu through t
   assert.deepEqual(out(run(plus, 'next', proto(input)), input), out(viaMenu, cleaned));
 });
 
+test('watch page first load is cleaned by the playback module and then gets the download menu', () => {
+  const cardData = cat(msg(4, nested([169495254, 462702848, 1, 48687757], msg(1, text('AAAAAAAAAAA')))), msg(5, nested([169495254, 98150882, 1, 66439850], service('不感兴趣'))));
+  const page = msg(3, msg(7, msg(51779735, msg(1, msg(49399797, msg(1, msg(50195462, msg(1, nested([153515154, 172660663, 1, 168777401, 5, 232954548, 18], cardData)))))))));
+  // 分段的字段 2 是播放器响应：字段 2 为可播放状态，字段 7 为广告位。
+  const input = msg(1, cat(msg(2, cat(msg(2, [8, 0]), msg(7, [1, 2]), msg(11, text('KEEP')))), page));
+  const cleaned = out(run(noAds, 'get_watch', proto(input)), input);
+  const viaMenu = run(menuOnly, 'get_watch', proto(new Uint8Array(cleaned)));
+  assert.ok(viaMenu.output.bodyBytes instanceof ArrayBuffer);
+  const merged = run(plus, 'get_watch', proto(input));
+  assert.deepEqual(out(merged, input), out(viaMenu, cleaned));
+  assert.ok(merged.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] get_watch added=1 removed=0$/.test(line)));
+  assert.notDeepEqual(cleaned, Buffer.from(input));
+});
+
 test('JSON home and search responses and every other endpoint behave exactly like the ad-only bundle', () => {
   const json = body => ({statusCode:200, headers:{'Content-Type':'application/json'}, body});
   const feed = JSON.stringify({contents:{sectionListRenderer:{contents:[{adSlotRenderer:{}}, {videoRenderer:{videoId:'KEEP'}}]}}});
   const player = JSON.stringify({playabilityStatus:{status:'OK'}, adPlacements:[{}], playerAds:[{}], videoDetails:{videoId:'v'}});
   const reel = JSON.stringify({entries:[{command:{reelWatchEndpoint:{videoId:'ad', adClientParams:{isAd:true}}}}, {command:{reelWatchEndpoint:{videoId:'keep'}}}]});
-  for (const [name, response] of [['browse', json(feed)], ['next', json(feed)], ['search', json(feed)], ['player', json(player)], ['get_watch', json(player)], ['reel/reel_watch_sequence', json(reel)],
+  for (const [name, response] of [['browse', json(feed)], ['next', json(feed)], ['search', json(feed)], ['player', json(player)], ['get_watch', json(player)], ['reel/reel_watch_sequence', json(reel)], ['player', proto(msg(7, [1, 2]))],
     ['player', proto(continuation(video('AAAAAAAAAAA'), adSlot))], ['log_event', proto(continuation(video('AAAAAAAAAAA')))]]) {
     const a = run(plus, name, response), b = run(noAds, name, response);
     assert.deepEqual(JSON.parse(JSON.stringify({...a.output, bodyBytes:a.output.bodyBytes && Array.from(new Uint8Array(a.output.bodyBytes))})),

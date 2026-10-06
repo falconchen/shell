@@ -94,7 +94,7 @@ async function minifyBundle(name, source, target) {
  * 更新时间：2026-10-06
  * @param {string} phase 请求或响应阶段。
  * @param {boolean} debug 是否生成输出处理结果的调试版；除调试开关外与正式版相同。
- * @param {boolean} [plus] 是否生成合并版响应包：首页、搜索和播放页推荐响应先去广告，再交给独立的下载菜单脚本处理；其他接口与正式版相同。
+ * @param {boolean} [plus] 是否生成合并版响应包：首页、搜索和播放页（next、get_watch）响应先去广告，再交给独立的下载菜单脚本处理；其他接口与正式版相同。
  * @returns {Promise<Object>} 压缩文本、文件地址及前后体积。
  */
 async function compileQXScript(phase, debug, plus) {
@@ -114,7 +114,7 @@ async function compileQXScript(phase, debug, plus) {
   // 合并版：下载菜单脚本原样包进函数，以形参接收去广告后的正文；去广告模块结束时不直接完成，而是把结果交给它。
   // 菜单脚本放行（返回空对象）时沿用去广告的结果，两者互不知道对方存在。
   const chain = !plus ? '' : `function ytQXDownloadMenu($response, $done){\n${await fs.readFile(new URL('YouTubeDownloadMenu.js', qxDownloadRoot), 'utf8')}\n}
-        if (/\\/youtubei\\/v1\\/(?:browse|search|next)(?:\\?[^#]*)?$/i.test(url)) {
+        if (/\\/youtubei\\/v1\\/(?:browse|search|next|get_watch)(?:\\?[^#]*)?$/i.test(url)) {
           var ytQXFinish = $done;
           $done = function (output) {
             var body = output && output.body instanceof Uint8Array ? output.body : $response.body;
