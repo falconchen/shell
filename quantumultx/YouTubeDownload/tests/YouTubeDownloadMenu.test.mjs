@@ -91,19 +91,22 @@ test('unexpected responses pass through', () => {
 });
 
 /**
- * 功能：以 script-echo-response 的形式运行表单脚本。
+ * 功能：以 script-echo-response 的形式运行提交脚本，并记录它发出的请求。
  * 更新时间：2026-10-06
  * @param {string} url 请求地址。
- * @returns {Object} 脚本返回的响应。
+ * @param {Object} [options] 请求头、下载站的应答，或不提供 $task。
+ * @returns {Promise<{output:Object, sent:Array<Object>, logs:Array<string>}>} 脚本返回的响应、发出的请求和日志。
  */
-function runPost(url) {
-  let output, calls = 0;
-  vm.runInNewContext(post, {console:{log() {}}, $request:{url, method:'GET', headers:{}}, $done(value) {output = value; calls++;}}, {timeout:2000});
-  assert.equal(calls, 1);
-  return output;
+function runPost(url, {headers = {}, reply = {statusCode:200, headers:{'Content-Type':'text/html; charset=utf-8'}, body:'<p>TASK-PAGE</p>'}, task = true} = {}) {
+  return new Promise(resolve => {
+    const sent = [], logs = [];
+    const context = {console:{log:value => logs.push(value)}, $request:{url, method:'GET', headers}, $done(output) {resolve({output, sent, logs});}};
+    if (task) context.$task = {fetch(request) {sent.push(JSON.parse(JSON.stringify(request))); return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply);}};
+    vm.runInNewContext(post, context, {timeout:2000});
+  });
 }
 
-test('generated address is matched by the echo rule and answered with an auto-submitting POST form', () => {
+test('generated address is matched by the echo rule and posted to the site by the script', async () => {
   const rule = snippet.split('\n').filter(line => line.includes('script-echo-response'));
   assert.equal(rule.length, 1);
   const [pattern, url, type, path] = rule[0].split(' ');
@@ -111,20 +114,39 @@ test('generated address is matched by the echo rule and answered with an auto-su
   const regex = new RegExp(pattern);
   for (const kind of ['video', 'audio']) {
     assert.ok(regex.test(openUrl('mfJqH4kc2oQ', kind)));
-    const output = runPost(openUrl('mfJqH4kc2oQ', kind));
-    assert.equal(output.status, 'HTTP/1.1 200 OK');
-    assert.equal(output.headers['Content-Type'], 'text/html; charset=utf-8');
-    assert.ok(output.body.includes('<form id="f" method="post" action="http://192.168.6.7:5100/">'));
-    assert.ok(output.body.includes('<input type="hidden" name="url" value="https://www.youtube.com/watch?v=mfJqH4kc2oQ">'));
-    assert.ok(output.body.includes(`<input type="hidden" name="type" value="${kind}">`));
-    assert.ok(output.body.includes('document.getElementById("f").submit()'));
+    const {output, sent, logs} = await runPost(openUrl('mfJqH4kc2oQ', kind), {headers:{cookie:'session=KEEP'}});
+    assert.deepEqual(sent, [{url:'http://192.168.6.7:5100/', method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded', Cookie:'session=KEEP'},
+      body:`url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=${kind}`, opts:{redirection:false}}]);
+    assert.deepEqual(JSON.parse(JSON.stringify(output)), {status:'HTTP/1.1 200 OK', headers:{'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'}, body:'<p>TASK-PAGE</p>'});
+    assert.ok(!output.body.includes('<form'));
+    assert.deepEqual(logs, [`[YouTubeDownloadPost 0.3.0] posted type=${kind} status=200`]);
   }
-  // 表单提交的目标地址和站点首页不被规则匹配，不会循环。
+});
+
+test('site redirects and cookies are handed to the browser, and failures fall back to a manual form', async () => {
+  const redirect = await runPost(openUrl('mfJqH4kc2oQ'), {reply:{statusCode:302, headers:{location:'/task/abc', 'set-cookie':'sid=1; Path=/'}, body:''}});
+  assert.equal(redirect.sent[0].headers.Cookie, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(redirect.output)), {status:'HTTP/1.1 302 Found', headers:{'Content-Type':'text/html; charset=utf-8', Location:'/task/abc', 'Set-Cookie':'sid=1; Path=/', 'Cache-Control':'no-store'}, body:''});
+  for (const options of [{reply:new Error('offline')}, {task:false}]) {
+    const {output} = await runPost(openUrl('mfJqH4kc2oQ', 'audio'), options);
+    assert.equal(output.status, 'HTTP/1.1 502 Bad Gateway');
+    assert.ok(output.body.includes('<form method="post" action="http://192.168.6.7:5100/">'));
+    assert.ok(output.body.includes('<input type="hidden" name="url" value="https://www.youtube.com/watch?v=mfJqH4kc2oQ">'));
+    assert.ok(output.body.includes('<input type="hidden" name="type" value="audio">'));
+    assert.ok(!output.body.includes('submit()'));
+  }
+});
+
+test('other addresses are neither matched by the rule nor submitted', async () => {
+  const regex = new RegExp(snippet.split('\n').find(line => line.includes('script-echo-response')).split(' ')[0]);
+  // 下载站首页和表单提交的目标地址不被规则匹配，不会循环。
   for (const other of ['http://192.168.6.7:5100/', 'http://192.168.6.7:5100/?url=', 'http://192.168.6.7:5100/?url=https%3A%2F%2Fevil.example%2F&type=video',
-    openUrl('mfJqH4kc2oQ') + '&x=1', openUrl('short'), openUrl('mfJqH4kc2oQ', 'other'), 'http://192.168.6.70:5100/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=video', 'https://192.168.6.7:5100/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=video']) {
+    openUrl('mfJqH4kc2oQ') + '&x=1', openUrl('short'), openUrl('mfJqH4kc2oQ', 'other'), 'http://192.168.6.70:5100/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=video',
+    'https://192.168.6.7:5100/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=video']) {
     assert.ok(!regex.test(other), other);
-    const output = runPost(other);
+    const {output, sent} = await runPost(other);
     assert.equal(output.status, 'HTTP/1.1 400 Bad Request');
+    assert.deepEqual(sent, []);
     assert.ok(!output.body.includes('<form') && !output.body.includes('evil'));
   }
 });

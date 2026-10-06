@@ -8,7 +8,7 @@
  */
 (function () {
   "use strict";
-  // 菜单项打开的地址：下载站加 url 和 type 两个查询参数。YouTubeDownloadPost.js 拦截这一地址并改为表单 POST；
+  // 菜单项打开的地址：下载站加 url 和 type 两个查询参数。YouTubeDownloadPost.js 拦截这一地址并代为 POST；
   // 未被拦截时只会打开下载站首页。
   var SITE = "http://192.168.6.7:5100/";
   // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
