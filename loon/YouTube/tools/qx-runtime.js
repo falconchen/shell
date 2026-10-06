@@ -6,6 +6,8 @@
  * @returns {Object|null} 适配后的运行时对象；阶段不符或缺少请求时返回 null。
  */
 function ytQXRuntime(phase, options) {
+  // Quantumult X 发布包的版本；片段规则、适配层或固定开关的含义有变化时递增，用于在日志中确认设备已更新。
+  var VERSION = "1.0.1";
   var nativeDone = $done;
   var hasResponse = typeof $response !== "undefined" && !!$response;
   if (typeof $request === "undefined" || !$request || (phase === "response") !== hasResponse) { nativeDone({}); return null; }
@@ -49,12 +51,17 @@ function ytQXRuntime(phase, options) {
     target.bodyBytes = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
   }
   /**
-   * 功能：把 Loon 形式的完成结果转换为 Quantumult X 形式后结束脚本。
-   * 更新时间：2026-10-06
+   * 功能：把 Loon 形式的完成结果转换为 Quantumult X 形式后结束脚本，并输出一行含版本、阶段、接口名和处理结果的日志；不输出查询参数和正文。
+   * 更新时间：2026-10-07
    * @param {Object} output 源码输出。
    */
   function done(output) {
     var result = {};
+    if (typeof console !== "undefined") {
+      var name = /\/youtubei\/v1\/([a-z_\/]+)(?:\?|$)/i.exec(String($request.url || "")) || /\.googlevideo\.com\/(initplayback)(?:\?|$)/i.exec(String($request.url || ""));
+      var state = !output || typeof output !== "object" ? "pass" : output.response ? "answered" : output.headers || Object.prototype.hasOwnProperty.call(output, "body") ? "changed" : "pass";
+      console.log("[YouTubeNoAds " + VERSION + "] " + phase + " " + (name ? name[1] : "unknown") + " " + state);
+    }
     if (output && typeof output === "object") {
       if (output.response && typeof output.response === "object") {
         var status = Number(output.response.status) || 200;

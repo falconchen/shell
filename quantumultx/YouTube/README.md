@@ -154,6 +154,20 @@ pnpm run test
 
 `dist/` 由构建生成，不手工修改。
 
+## 确认版本
+
+正式版、调试版和合并版每处理一次请求或响应，都在 Quantumult X 的日志里输出一行，可据此确认设备上的脚本是否已更新：
+
+```text
+[YouTubeNoAds 1.0.1] request player/ad_break answered
+[YouTubeNoAds 1.0.1] request player changed
+[YouTubeNoAds 1.0.1] response browse pass
+```
+
+依次是版本、阶段、接口名和结果：`answered` 表示脚本直接应答，`changed` 表示改写了内容，`pass` 表示原样放行。不输出查询参数和正文。
+
+版本号在 `loon/YouTube/tools/qx-runtime.js` 的 `VERSION`，片段规则、适配层或固定开关的含义有变化时递增。当前为 1.0.1，对应 `player/ad_break` 改用 `script-echo-response` 之后的构建；此前的构建不输出这一行。
+
 ## 调试版
 
 排查漏掉的广告时，把重写引用换成调试片段，不要与正式片段同时启用：

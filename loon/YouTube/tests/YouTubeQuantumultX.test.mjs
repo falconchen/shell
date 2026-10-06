@@ -190,8 +190,22 @@ test('debug variant differs from the release build only by script paths and the 
     assert.equal(body(debug), body(qx[phase]).replace('script_debug:false', 'script_debug:true'));
   }
   const logged = code => {const logs = []; vm.runInNewContext(code, {...globals, console:{log:value => logs.push(value)}, $request:request, $response:response, $prefs:{valueForKey() {return null;}, setValueForKey() {return true;}, removeValueForKey() {return true;}}, $done() {}}, {timeout:2000}); return logs;};
-  assert.deepEqual(logged(qx.response), []);
+  assert.equal(logged(qx.response).length, 1);
+  assert.match(logged(qx.response)[0], /^\[YouTubeNoAds \d+\.\d+\.\d+\] response browse pass$/);
   assert.equal(logged(read('dist/response.debug.min.js', qxRoot)).filter(line => /^\[YouTubeFeed [\d.]+\] browse pass: removed=0 /.test(line)).length, 1);
+});
+
+test('release build logs one line with version, phase, endpoint and outcome, without query or body', () => {
+  const logs = code => (request, response) => {const out = []; vm.runInNewContext(code, {...globals, console:{log:value => out.push(value)}, $request:request, ...(response ? {$response:response} : {}), $prefs:{valueForKey() {return null;}, setValueForKey() {return true;}, removeValueForKey() {return true;}}, $done() {}}, {timeout:2000}); return out;};
+  const request = logs(qx.request), response = logs(qx.response);
+  const version = /^\[YouTubeNoAds (\d+\.\d+\.\d+)\] /.exec(request({url:api + 'player/ad_break?key=PRIVATE', method:'POST', headers:{}})[0])[1];
+  const line = rest => '[YouTubeNoAds ' + version + '] ' + rest;
+  assert.deepEqual(request({url:api + 'player/ad_break?key=PRIVATE', method:'POST', headers:{}}), [line('request player/ad_break answered')]);
+  assert.deepEqual(request({url:'https://rr5---sn-abc.googlevideo.com/initplayback?id=PRIVATE', method:'POST', headers:{'user-agent':appAgent}}), [line('request initplayback answered')]);
+  assert.deepEqual(request({url:'https://rr5---sn-abc.googlevideo.com/initplayback?id=PRIVATE', method:'GET', headers:{'user-agent':appAgent}}), [line('request initplayback pass')]);
+  assert.deepEqual(request({url:api + 'player?key=PRIVATE', method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({context:{adSignalsInfo:{params:[1]}, client:{hl:'zh'}}, playbackContext:{contentPlaybackContext:{adParams:'x', vis:0}}, videoId:'PRIVATE'})}), [line('request player changed')]);
+  assert.deepEqual(response({url:api + 'next?key=PRIVATE', method:'POST', headers:{}}, {statusCode:200, headers:{'Content-Type':'application/json'}, body:'{"contents":{}}'}), [line('response next pass')]);
+  assert.deepEqual(response({url:api + 'player', method:'POST', headers:{}}), []);
 });
 
 test('fixed background playback option changes the player response only when built as enabled', () => {
