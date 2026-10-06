@@ -91,16 +91,17 @@ async function minifyBundle(name, source, target) {
  * 功能：生成 Quantumult X 发布包；只含去广告功能模块，由适配层转换运行时接口并注入固定开关。
  * 更新时间：2026-10-06
  * @param {string} phase 请求或响应阶段。
+ * @param {boolean} debug 是否生成输出处理结果的调试版；除调试开关外与正式版相同。
  * @returns {Promise<Object>} 压缩文本、文件地址及前后体积。
  */
-async function compileQXScript(phase) {
+async function compileQXScript(phase, debug) {
   const modules = await readModules(qxBundles[phase]);
   const runtime = await fs.readFile(new URL('tools/qx-runtime.js', root), 'utf8');
   const saved = JSON.parse(await fs.readFile(new URL('options.json', qxRoot), 'utf8'));
   const regions = ['original', 'CN', 'HK', 'TW', 'US', 'JP', 'KR', 'SG', 'GB', 'DE', 'RU'];
-  for (const key of ['background_playback', 'hide_home_shorts', 'script_debug']) if (typeof saved[key] !== 'boolean') throw new Error(`options.json 的 ${key} 必须为 true 或 false`);
+  for (const key of ['background_playback', 'hide_home_shorts']) if (typeof saved[key] !== 'boolean') throw new Error(`options.json 的 ${key} 必须为 true 或 false`);
   if (!regions.includes(saved.playback_region)) throw new Error(`options.json 的 playback_region 必须为 ${regions.join('、')} 之一`);
-  const options = {background_playback: saved.background_playback, hide_home_shorts: saved.hide_home_shorts, playback_region: saved.playback_region, script_debug: saved.script_debug};
+  const options = {background_playback: saved.background_playback, hide_home_shorts: saved.hide_home_shorts, playback_region: saved.playback_region, script_debug: debug};
   const route = phase === 'request'
     ? `if (/^https:\\/\\/[a-z0-9-]+\\.googlevideo\\.com\\/initplayback(?:\\?[^#]*)?$/i.test(url)) return ytQXEmptyVideo($request, $done);
        if (/\\/youtubei\\/v1\\/(?:player|get_watch|player\\/ad_break)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();`
@@ -118,18 +119,33 @@ async function compileQXScript(phase) {
         return $done({});
       })(qx.request, qx.response, qx.done, qx.argument, qx.store);
     })();`;
-  return minifyBundle(`quantumultx ${phase}`, source, new URL(`dist/${phase}.min.js`, qxRoot));
+  return minifyBundle(`quantumultx ${phase}${debug ? ' debug' : ''}`, source, new URL(`dist/${phase}${debug ? '.debug' : ''}.min.js`, qxRoot));
+}
+
+/**
+ * 功能：由正式片段生成调试片段，只替换标题和脚本地址，保证两者的规则始终一致。
+ * 更新时间：2026-10-06
+ * @returns {Promise<Object>} 调试片段文本及文件地址。
+ */
+async function compileQXDebugSnippet() {
+  const snippet = await fs.readFile(new URL('YouTubeNoAds.snippet', qxRoot), 'utf8');
+  const title = '# YouTube 去广告（Quantumult X）\n';
+  if (!snippet.startsWith(title) || !snippet.includes('/dist/request.min.js') || !snippet.includes('/dist/response.min.js')) throw new Error('YouTubeNoAds.snippet 的标题或脚本地址与预期不符');
+  const code = '# YouTube 去广告（Quantumult X，调试版）\n# 自动生成，请修改 YouTubeNoAds.snippet 后重新构建。脚本在 Quantumult X 的重写记录中输出每次处理结果，其余与正式版相同；不要与正式版同时启用。\n' +
+    snippet.slice(title.length).replace(/\/dist\/(request|response)\.min\.js/g, '/dist/$1.debug.min.js');
+  return {name: 'quantumultx debug snippet', code, target: new URL('YouTubeNoAds.debug.snippet', qxRoot), before: Buffer.byteLength(snippet), after: Buffer.byteLength(code)};
 }
 
 // 全部文件成功生成并通过语法检查后才开始写入；构建过程不修改源码、主插件或 Quantumult X 片段。
-const results = (await Promise.all(Object.keys(bundles).map(compileScript))).concat(await Promise.all(Object.keys(qxBundles).map(compileQXScript)));
+const results = (await Promise.all(Object.keys(bundles).map(compileScript))).concat(
+  await Promise.all([false, true].flatMap(debug => Object.keys(qxBundles).map(phase => compileQXScript(phase, debug)))), await compileQXDebugSnippet());
 if (!check) for (const base of [root, qxRoot]) await fs.mkdir(new URL('dist/', base), {recursive: true});
 for (const result of results) {
   if (check) {
     const saved = await fs.readFile(result.target, 'utf8').catch(() => null);
-    if (saved !== result.code) throw new Error(`压缩产物缺失或过期：${fileURLToPath(result.target)}；请重新构建`);
+    if (saved !== result.code) throw new Error(`构建产物缺失或过期：${fileURLToPath(result.target)}；请重新构建`);
   } else {
     await fs.writeFile(result.target, result.code);
   }
-  console.log(`${result.name}: ${result.before} → ${result.after} 字节，减少 ${(100 * (1 - result.after / result.before)).toFixed(1)}%${check ? '，产物一致' : ''}`);
+  console.log(`${result.name}: ${result.before} → ${result.after} 字节${result.after < result.before ? `，减少 ${(100 * (1 - result.after / result.before)).toFixed(1)}%` : ''}${check ? '，产物一致' : ''}`);
 }

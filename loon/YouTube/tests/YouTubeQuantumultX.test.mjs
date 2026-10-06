@@ -175,6 +175,22 @@ test('feed and Shorts responses reach their modules and match the Loon bundle', 
   assert.ok(changed.body.includes('keep') && !changed.body.includes('adClientParams'));
 });
 
+test('debug variant differs from the release build only by script paths and the debug flag', () => {
+  const debugSnippet = read('YouTubeNoAds.debug.snippet', qxRoot);
+  const rules = value => value.split('\n').filter(line => line && !line.startsWith('#'));
+  assert.deepEqual(rules(debugSnippet), rules(snippet).map(line => line.replace(/\/dist\/(request|response)\.min\.js/, '/dist/$1.debug.min.js')));
+  assert.equal(rules(debugSnippet).filter(line => line.includes('.debug.min.js')).length, 3);
+  const request = {url:api + 'browse', method:'POST', headers:{}}, response = {statusCode:200, headers:{'Content-Type':'application/json'}, body:'{"contents":{}}'};
+  for (const phase of ['request', 'response']) {
+    const debug = read(`dist/${phase}.debug.min.js`, qxRoot), body = code => code.slice(code.indexOf('\n'));
+    assert.ok(qx[phase].includes('script_debug:false') && debug.includes('script_debug:true'));
+    assert.equal(body(debug), body(qx[phase]).replace('script_debug:false', 'script_debug:true'));
+  }
+  const logged = code => {const logs = []; vm.runInNewContext(code, {...globals, console:{log:value => logs.push(value)}, $request:request, $response:response, $prefs:{valueForKey() {return null;}, setValueForKey() {return true;}, removeValueForKey() {return true;}}, $done() {}}, {timeout:2000}); return logs;};
+  assert.deepEqual(logged(qx.response), []);
+  assert.equal(logged(read('dist/response.debug.min.js', qxRoot)).filter(line => /^\[YouTubeFeed [\d.]+\] browse pass: removed=0 /.test(line)).length, 1);
+});
+
 test('fixed background playback option changes the player response only when built as enabled', () => {
   const headers = {'Content-Type':'application/json'}, request = {url:api + 'player', method:'POST', headers:{}};
   const body = JSON.stringify({playabilityStatus:{status:'OK', playableInBackground:false}, videoDetails:{videoId:'v'}});

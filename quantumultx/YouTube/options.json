@@ -1,6 +1,5 @@
 {
   "background_playback": true,
   "hide_home_shorts": true,
-  "playback_region": "original",
-  "script_debug": true
+  "playback_region": "original"
 }

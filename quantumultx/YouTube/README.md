@@ -54,14 +54,11 @@ Quantumult X 的重写片段没有插件参数界面，开关写在 `options.jso
 {
   "background_playback": true,
   "hide_home_shorts": true,
-  "playback_region": "original",
-  "script_debug": true
+  "playback_region": "original"
 }
 ```
 
-`playback_region` 可选 `original`、`CN`、`HK`、`TW`、`US`、`JP`、`KR`、`SG`、`GB`、`DE`、`RU`。`script_debug` 为 `true` 时，脚本每处理一次响应会在 Quantumult X 日志里输出一行处理结果（如 `[YouTubeFeed 2.6.0] browse pass: removed=0 ...`），只含计数和格式，不含正文；用于排查漏掉的广告，当前为排查信息流广告而开启，排查结束后应改回 `false`。
-
-修改后在 `loon/YouTube/` 重新构建并推送：
+`playback_region` 可选 `original`、`CN`、`HK`、`TW`、`US`、`JP`、`KR`、`SG`、`GB`、`DE`、`RU`。修改后在 `loon/YouTube/` 重新构建并推送：
 
 ```sh
 pnpm install --frozen-lockfile --ignore-scripts
@@ -70,6 +67,32 @@ pnpm run test
 ```
 
 `dist/` 由构建生成，不手工修改。
+
+## 调试版
+
+排查漏掉的广告时，把重写引用换成调试片段，不要与正式片段同时启用：
+
+```text
+https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouTubeNoAds.debug.snippet
+```
+
+调试版与正式版的规则和处理逻辑相同，只多一项：脚本每处理一次请求或响应，输出一行处理结果。在 Quantumult X 的“重写”记录里点开对应条目，“日志”一栏可以看到，例如：
+
+```text
+[YouTubeFeed 2.6.1] browse changed: removed=1 adaptive_removed=0 format=protobuf opaque_elements=11 removed_eml=1 removed_dividers=1 hidden_shorts=0
+```
+
+输出只含计数、格式和版本号，不含正文、账号信息或视频内容。各模块版本号互相独立：首页信息流是 `YouTubeFeed`，播放相关是 `YouTubePlayback`。
+
+| 现象 | 含义 |
+| --- | --- |
+| 广告出现前有 `browse pass`，且 `opaque_elements` 不为 0 | 卡片经过了脚本但布局未登记 |
+| 广告出现前有 `browse pass`，且 `opaque_elements=0` | 外层结构未登记，脚本没有进入卡片 |
+| 广告出现前后没有任何 `browse` 记录 | 请求没有经过脚本，先检查 MitM 和 QUIC 回退 |
+
+补规则需要对应响应的原始内容：开启 Quantumult X 的 HTTP 抓取，导出广告出现前最近一条 `/youtubei/v1/browse`（或 `next`、`search`）请求。导出内容含登录凭据和推荐内容，只在本地分析，不要提交仓库。
+
+`YouTubeNoAds.debug.snippet` 和 `dist/*.debug.min.js` 由构建自动生成，随正式版一起更新，不手工修改。
 
 ## 与 Loon 版的差异
 
