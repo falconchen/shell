@@ -85,7 +85,15 @@ test('each half still works when the other has nothing to do', () => {
   assert.equal(Object.keys(run(plus, 'browse', {...proto(onlyMenu), statusCode:403}).output).length, 0);
 });
 
-test('JSON home responses and every other endpoint behave exactly like the ad-only bundle', () => {
+test('search response gets the download menu through the merged bundle', () => {
+  const input = cat(msg(4, msg(49399797, cat(video('AAAAAAAAAAA'), plain))), msg(777, text('REGISTRY-KEEP')));
+  const viaMenu = run(menuOnly, 'search', proto(input));
+  assert.ok(viaMenu.output.bodyBytes instanceof ArrayBuffer);
+  assert.deepEqual(out(run(plus, 'search', proto(input)), input), out(viaMenu, input));
+  assert.equal(Object.keys(run(noAds, 'search', proto(input)).output).length, 0);
+});
+
+test('JSON home and search responses and every other endpoint behave exactly like the ad-only bundle', () => {
   const json = body => ({statusCode:200, headers:{'Content-Type':'application/json'}, body});
   const feed = JSON.stringify({contents:{sectionListRenderer:{contents:[{adSlotRenderer:{}}, {videoRenderer:{videoId:'KEEP'}}]}}});
   const player = JSON.stringify({playabilityStatus:{status:'OK'}, adPlacements:[{}], playerAds:[{}], videoDetails:{videoId:'v'}});
@@ -95,6 +103,7 @@ test('JSON home responses and every other endpoint behave exactly like the ad-on
     const a = run(plus, name, response), b = run(noAds, name, response);
     assert.deepEqual(JSON.parse(JSON.stringify({...a.output, bodyBytes:a.output.bodyBytes && Array.from(new Uint8Array(a.output.bodyBytes))})),
       JSON.parse(JSON.stringify({...b.output, bodyBytes:b.output.bodyBytes && Array.from(new Uint8Array(b.output.bodyBytes))})), name);
+    // JSON 正文不交给菜单脚本（它只处理 Protobuf），其余接口不经过它。
     assert.ok(!a.logs.some(line => line.includes('YouTubeDownloadMenu')), name);
   }
 });

@@ -33,11 +33,12 @@ const home = list => nested([9, 58173949, 1, 58174010, 4, 49399797], list);
  * 更新时间：2026-10-06
  * @param {Uint8Array} body 响应正文。
  * @param {Object} [response] 覆盖默认响应字段。
+ * @param {string} [name] 接口名称。
  * @returns {{output:Object, logs:Array<string>}} 脚本结果和输出。
  */
-function run(body, response = {}) {
+function run(body, response = {}, name = 'browse') {
   let output, calls = 0; const logs = [];
-  vm.runInNewContext(source, {Uint8Array, ArrayBuffer, console:{log:value => logs.push(value)}, $request:{url:'https://youtubei.googleapis.com/youtubei/v1/browse'},
+  vm.runInNewContext(source, {Uint8Array, ArrayBuffer, console:{log:value => logs.push(value)}, $request:{url:'https://youtubei.googleapis.com/youtubei/v1/' + name + '?prettyPrint=false'},
     $response:{statusCode:200, headers:{'Content-Type':'application/x-protobuf'}, bodyBytes:body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), ...response},
     $done(value) {output = value; calls++;}}, {timeout:2000});
   assert.equal(calls, 1);
@@ -52,7 +53,8 @@ test('snippet binds browse responses and the generated download address to the s
   const [pattern, url, type, path] = rules[0].split(' ');
   assert.deepEqual([url, type, path], ['url', 'script-response-body', 'https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubeDownload/YouTubeDownloadMenu.js']);
   assert.ok(new RegExp(pattern).test('https://youtubei.googleapis.com/youtubei/v1/browse?prettyPrint=false'));
-  for (const name of ['next', 'player', 'get_watch', 'browse/extra']) assert.ok(!new RegExp(pattern).test('https://youtubei.googleapis.com/youtubei/v1/' + name));
+  assert.ok(new RegExp(pattern).test('https://youtubei.googleapis.com/youtubei/v1/search'));
+  for (const name of ['next', 'player', 'get_watch', 'browse/extra', 'search/extra']) assert.ok(!new RegExp(pattern).test('https://youtubei.googleapis.com/youtubei/v1/' + name));
 });
 
 for (const [name, wrap] of [['continuation', continuation], ['initial home', home]]) test(`${name} list gets both download items prepended, loses the native download item, and nothing else changes`, () => {
@@ -61,7 +63,7 @@ for (const [name, wrap] of [['continuation', continuation], ['initial home', hom
   const after = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(added('AAAAAAAAAAA'), ...items('AAAAAAAAAAA', false)), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(added('BBBB-BBB_BB'), ...items('BBBB-BBB_BB', false)))));
   const result = run(before);
   assert.deepEqual(bytes(result), Buffer.from(after));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.5.0] browse added=2 removed=2']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.6.0] browse added=2 removed=2']);
   // 已含同名条目的菜单不重复添加。
   untouched(run(after));
 });
@@ -92,7 +94,19 @@ test('listed native items are removed by type plus command or icon, and look-ali
     entry(77258115, '同类型的其他项', 243, msg(1611, [8, 1])), msg(1, msg(77258115, label('没有图标和命令')))];
   const result = run(continuation(card(tap('FFFFFFFFFFF'), menu(cast, castOther, next, last, later, playlist, save('FFFFFFFFFFF'), share, ...keep, service('不感兴趣'), report))));
   assert.deepEqual(bytes(result), Buffer.from(continuation(card(tap('FFFFFFFFFFF'), menu(added('FFFFFFFFFFF'), playlist, share, ...keep, service('不感兴趣'))))));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.5.0] browse added=1 removed=7']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.6.0] browse added=1 removed=7']);
+});
+
+test('search results use their own list position and each endpoint ignores the other one\'s', () => {
+  const search = list => cat(msg(1, text('CONTEXT-KEEP')), msg(4, msg(49399797, list)), msg(777, text('REGISTRY-KEEP')));
+  const list = id => cat(divider, card(tap(id), menu(service('不感兴趣'), save(id))));
+  const result = run(search(list('GGGGGGGGGGG')), {}, 'search');
+  assert.deepEqual(bytes(result), Buffer.from(search(cat(divider, card(tap('GGGGGGGGGGG'), menu(added('GGGGGGGGGGG'), service('不感兴趣')))))));
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.6.0] search added=1 removed=1']);
+  untouched(run(search(list('GGGGGGGGGGG')), {}, 'browse'));
+  untouched(run(continuation(list('GGGGGGGGGGG')), {}, 'search'));
+  untouched(run(home(list('GGGGGGGGGGG')), {}, 'search'));
+  untouched(run(continuation(list('GGGGGGGGGGG')), {}, 'next'));
 });
 
 test('unexpected responses pass through', () => {

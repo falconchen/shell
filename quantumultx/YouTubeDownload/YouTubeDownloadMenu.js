@@ -1,11 +1,11 @@
 /**
  * 文件：YouTubeDownloadMenu.js
- * 功能：在 YouTube 首页视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
+ * 功能：在 YouTube 首页和搜索结果页视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
  *       同时移除 REMOVE 中列出的原有条目（自带下载、投放、加入队列、稍后观看、举报）。
- * 版本：0.5.0
+ * 版本：0.6.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
- * 状态：实验。结构取自 YouTube iOS 21.29.3 的一份首页续页响应，尚未在设备上验证。
+ * 状态：实验。结构取自 YouTube iOS 21.29.3 的首页续页和搜索首屏响应各一份；首页菜单已在设备上确认，搜索页尚未验证。
  */
 (function () {
   "use strict";
@@ -15,7 +15,7 @@
   // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
   // 该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致；147（OFFLINE_DOWNLOAD）已在设备上确认显示为向下箭头。
   var ITEMS = [{label:"下载视频", icon:658, type:"video"}, {label:"下载音频", icon:21, type:"audio"}];
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
   // 要从菜单里移除的原有条目。按条目类型加命令编号或图标编号识别，不依赖界面语言；删掉某一行即可保留对应条目。
   // 自带下载：服务器下发的文字是“立即保存”，App 显示为“下载视频”；该对应关系已在设备上确认（移除后“下载视频”消失）。
   var REMOVE = [
@@ -27,8 +27,10 @@
   ];
   var MAX_BYTES = 4 * 1024 * 1024;
   var MAX_FIELDS = 60000;
-  // 首页首屏与续页中 SectionList 的位置，以及从列表项到视频卡片数据、再到菜单的固定路径。
-  var LISTS = [[9, 58173949, 1, 58174010, 4, 49399797], [10, 49399797]];
+  // 各接口响应中 SectionList 的位置：首页首屏与续页、搜索首屏（搜索续页没有样本）。之后从列表项到视频卡片数据、再到菜单的路径相同。
+  var LISTS = {browse:[[9, 58173949, 1, 58174010, 4, 49399797], [10, 49399797]], search:[[4, 49399797]]};
+  var endpoint = /\/youtubei\/v1\/(browse|search)(?:\?[^#]*)?$/i.exec(typeof $request !== "undefined" && $request ? String($request.url || "") : "");
+  endpoint = endpoint ? endpoint[1].toLowerCase() : "";
   var CARD = [1, 50195462, 1, 153515154, 172660663, 1, 168777401, 5, 232954548, 18];
   var MENU = [5, 169495254, 98150882, 1, 66439850];
   // 视频编号的来源：卡片点击命令里的 watchEndpoint（48687757）字段 1；缺失时取菜单“立即保存”命令（73080600）字段 1。
@@ -258,7 +260,7 @@
     var body = new Uint8Array($response.bodyBytes);
     if (!body.length || body.length > MAX_BYTES || (body[0] === 31 && body[1] === 139)) return {};
     var output = body;
-    LISTS.forEach(function (list) {
+    (LISTS[endpoint] || []).forEach(function (list) {
       output = edit(output, list, function (section) { return edit(section, CARD, patchCard); });
     });
     if (output === body) return {};
@@ -268,6 +270,6 @@
   var result = {};
   try { result = run(); }
   catch (error) { result = {}; added = "error:" + (error && error.message || "unknown"); }
-  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] browse " + (typeof added === "number" ? "added=" + added + " removed=" + removed : added));
+  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] " + (endpoint || "unknown") + " " + (typeof added === "number" ? "added=" + added + " removed=" + removed : added));
   $done(result);
 })();
