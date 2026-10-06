@@ -82,15 +82,17 @@ vmess=...., fast-open=false, udp-relay=false, aead=true, tag=示例节点-noudp
 static=YouTube, server-tag-regex=noudp$
 
 [filter_remote]
-https://你的YouTube分流规则地址, tag=YouTube, force-policy=YouTube, enabled=true
+https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouTube.list, tag=YouTube, force-policy=YouTube, update-interval=172800, opt-parser=false, enabled=true
 ```
+
+分流规则用本目录的 [YouTube.list](YouTube.list)，见下文「分流规则」。
 
 改完后删除 `udp_drop_list = 443`。
 
 ### 生效条件
 
 - 策略组里没有混入 `udp-relay=true` 的节点。
-- `youtubei.googleapis.com`、`youtube.com`、`googlevideo.com` 三类域名都走这个策略组。`youtubei.googleapis.com` 常被归在 Google 规则里，它走了别的策略时去广告的接口规则不命中。
+- `youtubei.googleapis.com`、`youtube.com`、`googlevideo.com` 三类域名都走这个策略组。本目录的 `YouTube.list` 已覆盖这三类；配置里如果另有 Google 规则先匹配到 `youtubei.googleapis.com`，它会走别的策略，去广告的接口规则不命中。
 - `fallback_udp_policy` 保持默认，不设为 `direct`。设为 `direct` 后，能直连 Google 的网络下 QUIC 会走通；不能直连时要等超时才回退，起播变慢。
 
 ### 验证
@@ -98,6 +100,21 @@ https://你的YouTube分流规则地址, tag=YouTube, force-policy=YouTube, enab
 删除 `udp_drop_list = 443` 后完全退出 YouTube 再打开，播放几个视频。片头广告消失，且重写日志里 `youtubei.googleapis.com` 的规则有命中记录，说明回退生效；没有命中记录说明 QUIC 仍在走通，按上面三条逐项检查。
 
 `resource-tag-regex`、解析器的 `udp=-1` 和 `fallback_udp_policy` 的默认值未对照 Quantumult X 文档核实，写入配置后先确认策略组里列出的节点符合预期。
+
+## 分流规则
+
+[YouTube.list](YouTube.list) 是本仓库维护的 YouTube 分流规则，地址：
+
+```text
+https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouTube.list
+```
+
+文件分两部分：
+
+- **第一部分**复制自 [blackmatrix7/ios_rule_script](https://github.com/blackmatrix7/ios_rule_script) 的 `rule/QuantumultX/YouTube/YouTube.list`（上游版本 2025-06-06，GPL-2.0），规则行未改动。同步上游时整段替换，并更新文件头的版本时间和条数。
+- **第二部分**是本仓库新增的规则。新规则只加在这里，不改第一部分。
+
+规则里的策略名 `YouTube` 是占位，引用时用 `force-policy` 指定实际策略。只做去广告、不改用 `udp-relay=false` 节点时，不需要引用这份规则。
 
 ## 修改开关
 
