@@ -2,11 +2,12 @@
  * 文件：YouTubeDownloadMenu.js
  * 功能：在 YouTube 首页、搜索结果页和播放页推荐列表视频卡片的“⋯”菜单开头加入“下载视频”“下载音频”两项，点击后打开下载站地址并带上视频网址；POST 提交由 YouTubeDownloadPost.js 完成。
  *       同时移除 REMOVE 中列出的原有条目（自带下载、投放、加入队列、稍后观看、举报）。
- * 版本：0.8.0
+ *       播放页当前视频操作栏的“⋯”面板同样处理：两项下载放在最前，移除自带的“下载”和“举报”，保留其余条目。
+ * 版本：0.9.0
  * 更新时间：2026-10-06
  * 运行环境：Quantumult X script-response-body；独立脚本，不依赖去广告脚本。
  * 状态：实验。结构取自 YouTube iOS 21.29.3 的首页续页、搜索首屏、播放页推荐续页（next）和播放页首屏（get_watch）响应；
- *       首页、搜索首屏和播放页推荐续页的菜单已在设备上确认，播放页首屏尚未验证。
+ *       首页、搜索首屏和播放页推荐列表的菜单已在设备上确认；当前视频的“⋯”面板尚未验证。
  */
 (function () {
   "use strict";
@@ -15,8 +16,14 @@
   var SITE = "http://192.168.6.7:5100/";
   // 按顺序加在菜单最前面的条目；type 为下载站表单的 type 字段。图标编号取自公开图标枚举：658 为 MY_VIDEOS，21 为 MUSIC。
   // 该枚举中的 52、59、100、242 等值与样本菜单的举报、稍后观看、分享、投放一致；147（OFFLINE_DOWNLOAD）已在设备上确认显示为向下箭头。
-  var ITEMS = [{label:"下载视频", icon:658, type:"video"}, {label:"下载音频", icon:21, type:"audio"}];
-  var VERSION = "0.8.0";
+  // name 是当前视频“⋯”面板用的图标名称（该面板按名称而不是编号引用图标），取自样本中出现过的名称。
+  var ITEMS = [{label:"下载视频", icon:658, name:"youtube_outline_experimental/play_24pt", type:"video"},
+    {label:"下载音频", icon:21, name:"youtube_outline_experimental/audio_24pt", type:"audio"}];
+  // 播放页当前视频操作栏“⋯”面板（37098）的位置：get_watch 首屏样本中确认；next 首屏按相同结构处理，没有样本。
+  // 面板的字段 2 是条目：489973921 感谢、33561776 自带下载（字段 1 为视频编号）、461054335 通用按钮（样本中为举报，图标名含 flag）。
+  var SHEET = [1, 216561405, 1, 153515154, 172660663, 1, 168777401, 5, 413471385, 1, 2185, 1, 10, 37098];
+  var SHEETS = {get_watch:[[1, 3, 7, 51779735, 1, 49399797].concat(SHEET)], next:[[7, 51779735, 1, 49399797].concat(SHEET)]};
+  var VERSION = "0.9.0";
   // 要从菜单里移除的原有条目。按条目类型加命令编号或图标编号识别，不依赖界面语言；删掉某一行即可保留对应条目。
   // 自带下载：服务器下发的文字是“立即保存”，App 显示为“下载视频”；该对应关系已在设备上确认（移除后“下载视频”消失）。
   var REMOVE = [
@@ -177,7 +184,7 @@
     var command = message(3, message(49679253, join([message(1, utf8(url)), scalar(2, 1)])));
     return message(1, message(66441108, join([label, message(2, scalar(1, item.icon)), command])));
   }
-  var added = 0, removed = 0;
+  var added = 0, removed = 0, sheets = 0;
   /**
    * 功能：判断菜单条目是否在 REMOVE 列表中：条目类型相符，且命令（字段 3）含指定编号，或图标（字段 2 → 1）为指定编号。
    * 更新时间：2026-10-06
@@ -255,6 +262,66 @@
     return edit(card, MENU, function (menu) { return addItem(menu, videoId); });
   }
   /**
+   * 功能：把字节按单字节字符转成字符串，用于比较 ASCII 内容。
+   * 更新时间：2026-10-06
+   * @param {Uint8Array|null} bytes 字节。
+   * @returns {string} 字符串，输入为空时为空字符串。
+   */
+  function ascii(bytes) {
+    var text = "";
+    for (var i = 0; bytes && i < bytes.length; i++) text += String.fromCharCode(bytes[i]);
+    return text;
+  }
+  /**
+   * 功能：生成“⋯”面板的一个条目：通用按钮（461054335），含图标名称、标题、打开网址的命令和朗读标签；样式字段 7、10、11 取样本中举报项的值。
+   * 更新时间：2026-10-06
+   * @param {string} videoId 视频编号。
+   * @param {Object} item ITEMS 中的一项。
+   * @returns {Uint8Array} 面板中的一个字段 2。
+   */
+  function sheetItem(videoId, item) {
+    var url = SITE + "?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + videoId) + "&type=" + item.type;
+    var command = message(4, message(170382688, message(1, message(169495254, message(49679253, join([message(1, utf8(url)), scalar(2, 1)]))))));
+    return message(2, message(461054335, join([message(2, utf8(item.name)), message(3, utf8(item.label)), command, message(5, utf8(item.label)), scalar(7, 9), scalar(10, 0), scalar(11, 5)])));
+  }
+  /**
+   * 功能：改写当前视频的“⋯”面板：下载项放在第一个条目之前，去掉自带下载和举报；取不到视频编号或已含下载站条目时不改动。
+   * 更新时间：2026-10-06
+   * @param {Uint8Array} sheet 面板（37098）消息。
+   * @returns {Uint8Array} 新面板或原面板。
+   */
+  function patchSheet(sheet) {
+    var records = parse(sheet), first = -1, videoId = "", marker = utf8(SITE + "?url=");
+    records.forEach(function (record, index) {
+      if (record.no !== 2 || record.wire !== 2) return;
+      if (first < 0) first = index;
+      var id = ascii(find(sheet.subarray(record.payloadStart, record.end), [33561776, 1]));
+      if (!videoId && /^[\w-]{11}$/.test(id)) videoId = id;
+    });
+    // 面板里没有自带下载项时，从请求地址的 id 参数取当前视频编号。
+    if (!videoId) {
+      var query = /[?&]id=([\w-]{11})(?:&|$)/.exec(typeof $request !== "undefined" && $request ? String($request.url || "") : "");
+      if (query) videoId = query[1];
+    }
+    if (first < 0 || !videoId) return sheet;
+    for (var i = 0; i + marker.length <= sheet.length; i++) {
+      var match = true;
+      for (var j = 0; j < marker.length && match; j++) match = sheet[i + j] === marker[j];
+      if (match) return sheet;
+    }
+    var parts = [];
+    records.forEach(function (record, index) {
+      if (index === first) ITEMS.forEach(function (item) { parts.push(sheetItem(videoId, item)); });
+      if (record.no === 2 && record.wire === 2) {
+        var entry = sheet.subarray(record.payloadStart, record.end);
+        if (find(entry, [33561776]) || /(?:^|\/)flag_/.test(ascii(find(entry, [461054335, 2])))) { removed++; return; }
+      }
+      parts.push(sheet.subarray(record.start, record.end));
+    });
+    sheets++;
+    return join(parts);
+  }
+  /**
    * 功能：处理当前响应；任何不符合预期的情况都返回空对象，由 Quantumult X 原样放行。
    * 更新时间：2026-10-06
    * @returns {Object} 交给 $done 的结果。
@@ -274,6 +341,9 @@
     (PANELS[endpoint] || []).forEach(function (panel) {
       output = edit(output, panel, patchCard);
     });
+    (SHEETS[endpoint] || []).forEach(function (sheet) {
+      output = edit(output, sheet, patchSheet);
+    });
     if (output === body) return {};
     return {bodyBytes:output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength)};
   }
@@ -281,6 +351,6 @@
   var result = {};
   try { result = run(); }
   catch (error) { result = {}; added = "error:" + (error && error.message || "unknown"); }
-  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] " + (endpoint || "unknown") + " " + (typeof added === "number" ? "added=" + added + " removed=" + removed : added));
+  if (typeof console !== "undefined") console.log("[YouTubeDownloadMenu " + VERSION + "] " + (endpoint || "unknown") + " " + (typeof added === "number" ? "added=" + added + " removed=" + removed + " sheet=" + sheets : added));
   $done(result);
 })();

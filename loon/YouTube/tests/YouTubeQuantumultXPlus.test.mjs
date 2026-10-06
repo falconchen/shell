@@ -69,7 +69,7 @@ test('home response is cleaned first and then gets the download menu', () => {
   assert.ok(!body.includes(Buffer.from(adSlot)) && body.includes(Buffer.from(plain)));
   assert.equal(body.toString('latin1').split('192.168.6.7:5100/?url=').length - 1, 4);
   assert.ok(body.length !== out(run(noAds, 'browse', proto(input)), input).length && body.length !== out(run(menuOnly, 'browse', proto(input)), input).length);
-  assert.ok(result.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] browse added=2 removed=0$/.test(line)));
+  assert.ok(result.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] browse added=2 removed=0 sheet=0$/.test(line)));
 });
 
 test('each half still works when the other has nothing to do', () => {
@@ -112,7 +112,7 @@ test('watch page first load is cleaned by the playback module and then gets the 
   assert.ok(viaMenu.output.bodyBytes instanceof ArrayBuffer);
   const merged = run(plus, 'get_watch', proto(input));
   assert.deepEqual(out(merged, input), out(viaMenu, cleaned));
-  assert.ok(merged.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] get_watch added=1 removed=0$/.test(line)));
+  assert.ok(merged.logs.some(line => /^\[YouTubeDownloadMenu [\d.]+\] get_watch added=1 removed=0 sheet=0$/.test(line)));
   assert.notDeepEqual(cleaned, Buffer.from(input));
 });
 

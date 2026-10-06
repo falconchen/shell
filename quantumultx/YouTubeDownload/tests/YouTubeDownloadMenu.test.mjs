@@ -65,7 +65,7 @@ for (const [name, wrap] of [['continuation', continuation], ['initial home', hom
   const after = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(added('AAAAAAAAAAA'), ...items('AAAAAAAAAAA', false)), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(added('BBBB-BBB_BB'), ...items('BBBB-BBB_BB', false)))));
   const result = run(before);
   assert.deepEqual(bytes(result), Buffer.from(after));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.8.0] browse added=2 removed=2']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.9.0] browse added=2 removed=2 sheet=0']);
   // 已含同名条目的菜单不重复添加。
   untouched(run(after));
 });
@@ -96,7 +96,7 @@ test('listed native items are removed by type plus command or icon, and look-ali
     entry(77258115, '同类型的其他项', 243, msg(1611, [8, 1])), msg(1, msg(77258115, label('没有图标和命令')))];
   const result = run(continuation(card(tap('FFFFFFFFFFF'), menu(cast, castOther, next, last, later, playlist, save('FFFFFFFFFFF'), share, ...keep, service('不感兴趣'), report))));
   assert.deepEqual(bytes(result), Buffer.from(continuation(card(tap('FFFFFFFFFFF'), menu(added('FFFFFFFFFFF'), playlist, share, ...keep, service('不感兴趣'))))));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.8.0] browse added=1 removed=7']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.9.0] browse added=1 removed=7 sheet=0']);
 });
 
 test('search results use their own list position and each endpoint ignores the other one\'s', () => {
@@ -104,7 +104,7 @@ test('search results use their own list position and each endpoint ignores the o
   const list = id => cat(divider, card(tap(id), menu(service('不感兴趣'), save(id))));
   const result = run(search(list('GGGGGGGGGGG')), {}, 'search');
   assert.deepEqual(bytes(result), Buffer.from(search(cat(divider, card(tap('GGGGGGGGGGG'), menu(added('GGGGGGGGGGG'), service('不感兴趣')))))));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.8.0] search added=1 removed=1']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.9.0] search added=1 removed=1 sheet=0']);
   untouched(run(search(list('GGGGGGGGGGG')), {}, 'browse'));
   untouched(run(continuation(list('GGGGGGGGGGG')), {}, 'search'));
   untouched(run(home(list('GGGGGGGGGGG')), {}, 'search'));
@@ -121,7 +121,7 @@ test('watch page recommendations use their own list positions and the shorter ta
     const wrap = body => cat(msg(1, text('CONTEXT-KEEP')), nested(path, body), msg(777, text('REGISTRY-KEEP')));
     const result = run(wrap(list('HHHHHHHHHHH')), {}, 'next');
     assert.deepEqual(bytes(result), Buffer.from(wrap(done('HHHHHHHHHHH'))), path.join('>'));
-    assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.8.0] next added=1 removed=1']);
+    assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.9.0] next added=1 removed=1 sheet=0']);
     untouched(run(wrap(list('HHHHHHHHHHH')), {}, 'browse'));
     untouched(run(wrap(list('HHHHHHHHHHH')), {}, 'search'));
   }
@@ -142,12 +142,38 @@ test('watch page first load (get_watch) patches both copies of the recommendatio
   const response = done => cat(msg(1, cat(msg(2, text('PLAYER-KEEP')), [120, 0])), [122, 0], msg(1, cat(page(done), msg(2, text('PLAYER-KEEP')))), [122, 2, 1, 2]);
   const result = run(response(false), {}, 'get_watch');
   assert.deepEqual(bytes(result), Buffer.from(response(true)));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.8.0] get_watch added=3 removed=3']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.9.0] get_watch added=3 removed=3 sheet=0']);
   untouched(run(response(true), {}, 'get_watch'));
   untouched(run(response(false), {}, 'next'));
   untouched(run(response(false), {}, 'player'));
   // 播放器数据所在的字段 2 不在任何路径上，即使内容形似卡片也不动。
   untouched(run(msg(1, msg(2, msg(7, msg(51779735, msg(1, msg(49399797, listed('JJJJJJJJJJJ', false))))))), {}, 'get_watch'));
+});
+
+test('current video overflow sheet gets both items first and loses native download and report', () => {
+  // 真机样本：操作栏元素（216561405 → … → 413471385 → 1 → 2185 → 1 → 10 → 37098），字段 2 为条目。
+  const tail = [1, 216561405, 1, 153515154, 172660663, 1, 168777401, 5, 413471385, 1, 2185, 1, 10, 37098];
+  const thanks = msg(2, msg(489973921, cat(msg(1, msg(1, text('感谢'))), msg(2, msg(1, text('发布醒目评论，表达你的心意'))))));
+  const premium = msg(2, msg(15469, msg(1, msg(489973921, msg(1, msg(1, text('观看无广告打扰的视频')))))));
+  const native = id => msg(2, msg(33561776, cat(msg(1, text(id)), msg(6, text('下载')), msg(34, text('免费试用 Premium')))));
+  const button = (icon, title) => msg(2, msg(461054335, cat(msg(2, text(icon)), msg(3, text(title)), msg(4, msg(170382688, msg(1, msg(169495254, msg(138681778, [8, 1]))))), msg(5, text(title)), [56, 9, 80, 0, 88, 5])));
+  const report = button('youtube_outline_experimental/flag_24pt', '举报'), other = button('youtube_outline_experimental/flagship_24pt', '其他按钮');
+  const ours = (id, name, icon, type) => msg(2, msg(461054335, cat(msg(2, text(icon)), msg(3, text(name)), msg(4, msg(170382688, msg(1, msg(169495254, msg(49679253, cat(msg(1, text(openUrl(id, type))), [16, 1])))))), msg(5, text(name)), [56, 9, 80, 0, 88, 5])));
+  const both = id => cat(ours(id, '下载视频', 'youtube_outline_experimental/play_24pt', 'video'), ours(id, '下载音频', 'youtube_outline_experimental/audio_24pt', 'audio'));
+  const sheet = (...entries) => cat(msg(1, text('HEADER-KEEP')), ...entries, msg(3, text('EXTRA-KEEP')), [32, 1]);
+  for (const [name, prefix] of [['get_watch', [1, 3, 7, 51779735, 1, 49399797]], ['next', [7, 51779735, 1, 49399797]]]) {
+    const wrap = body => cat(nested(prefix.concat(tail), body), msg(777, text('REGISTRY-KEEP')));
+    const result = run(wrap(sheet(premium, thanks, native('LLLLLLLLLLL'), report, other)), {}, name);
+    assert.deepEqual(bytes(result), Buffer.from(wrap(sheet(both('LLLLLLLLLLL'), premium, thanks, other))), name);
+    assert.deepEqual(result.logs, [`[YouTubeDownloadMenu 0.9.0] ${name} added=0 removed=2 sheet=1`]);
+    untouched(run(wrap(sheet(both('LLLLLLLLLLL'), premium, thanks, other)), {}, name));
+    untouched(run(wrap(sheet(premium, thanks, native('LLLLLLLLLLL'), report)), {}, 'browse'));
+  }
+  // 面板里没有自带下载项时取请求地址的 id 参数（测试请求地址为 ?id=abc，不是合法编号，故不改动）。
+  const lone = nested([1, 3, 7, 51779735, 1, 49399797].concat(tail), sheet(thanks, report));
+  untouched(run(lone, {}, 'get_watch'));
+  untouched(run(nested([1, 3, 7, 51779735, 1, 49399797].concat(tail), sheet(thanks, native('bad id here'), report)), {}, 'get_watch'));
+  untouched(run(nested([1, 3, 7, 51779735, 1, 49399797].concat(tail), cat(msg(1, text('HEADER-KEEP')), msg(3, text('NO-ITEMS')))), {}, 'get_watch'));
 });
 
 test('unexpected responses pass through', () => {
