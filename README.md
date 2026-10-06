@@ -226,6 +226,19 @@ sudo bash /var/lib/vps-security/security_hardening.sh --rollback
 4. 删除或停用其他匹配 YouTube 的去广告重写。
 5. 完全退出 YouTube 再打开。
 
+### 为什么要拦 UDP 443
+
+Quantumult X 的 MitM 只能解密走 TCP 的 HTTPS（HTTP/1.1 和 HTTP/2），解不了 QUIC（HTTP/3）。
+
+- **TCP 上的 HTTPS。** Quantumult X 用已信任的证书冒充服务器，与 App 完成 TLS 握手，从而看到并改写明文。重写和脚本都建立在这一步上。
+- **QUIC。** 加密握手嵌在 QUIC 协议里，跑在 UDP 上。解密需要实现完整的 QUIC 协议栈来做中间人，Quantumult X 没有实现。QUIC 流量对它只是无法解析的 UDP 包，只能转发或丢弃。
+
+YouTube App 会优先用 QUIC 访问 Google 域名，QUIC 走通时去广告规则全部不命中。所以第 1 步是整个去广告的前提：
+
+```text
+拦掉 UDP 443 → App 发现 QUIC 不通 → 回退到 TCP → MitM 解密 → 规则命中
+```
+
 ### YouTube 分流规则
 
 仓库维护了一份 Quantumult X 的 YouTube 分流规则 [YouTube.list](quantumultx/YouTube/YouTube.list)，在 `[filter_remote]` 里引用，`force-policy` 换成自己的策略名：
