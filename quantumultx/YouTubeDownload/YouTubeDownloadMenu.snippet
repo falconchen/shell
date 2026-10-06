@@ -1,9 +1,14 @@
 # YouTube 菜单增加“从第三方下载”（Quantumult X，实验）
-# 功能：在首页视频卡片的“⋯”菜单开头加入一项，点击后打开 YouTubeDownloadMenu.js 中 API 指定的地址并带上视频网址。
-# 更新时间：2026-10-06；结构取自 YouTube iOS 21.29.3 的一份首页续页响应，尚未在设备上验证。
+# 功能：在首页视频卡片的“⋯”菜单开头加入一项；点击后打开下载站，并由脚本生成自动提交的表单，以 POST 提交视频网址。
+# 更新时间：2026-10-06；结构取自 YouTube iOS 21.29.3 的一份首页续页响应。菜单项已在设备上确认能显示，POST 提交尚未验证。
 # 注意：与 YouTubeNoAds.snippet 都匹配 browse 响应，同一响应是否能被两个脚本先后处理未经确认；试用时先停用去广告片段。
 # 使用条件：开启 MitM 并信任证书；YouTube 需经 TCP 访问（见去广告片段说明中的 udp_drop_list）。
 
 hostname = youtubei.googleapis.com
 
+# 在菜单里加入“从第三方下载”。
 ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/browse(?:\?[^#]*)?$ url script-response-body https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubeDownload/YouTubeDownloadMenu.js
+
+# 菜单项只能发 GET：拦截它打开的地址，返回自动提交的表单页，由浏览器向下载站发 POST（url、type 两个字段）。只匹配菜单项生成的地址形式。
+# 下载站当前为内网测试地址（HTTP，无需 MitM）。若 Quantumult X 的 excluded_routes 排除了该网段，这条规则不会触发，只会打开下载站首页。
+^http:\/\/192\.168\.6\.7:5100\/\?url=https%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D[\w-]{11}&type=(?:video|audio)$ url script-echo-response https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubeDownload/YouTubeDownloadPost.js

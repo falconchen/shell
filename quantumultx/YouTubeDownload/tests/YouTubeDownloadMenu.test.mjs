@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 const source = fs.readFileSync(new URL('../YouTubeDownloadMenu.js', import.meta.url), 'utf8');
+const post = fs.readFileSync(new URL('../YouTubeDownloadPost.js', import.meta.url), 'utf8');
 const snippet = fs.readFileSync(new URL('../YouTubeDownloadMenu.snippet', import.meta.url), 'utf8');
 const v = n => {const a = []; while (n >= 128) {a.push(n % 128 + 128); n = Math.floor(n / 128);} return [...a, n];};
 const cat = (...parts) => Uint8Array.from(parts.flatMap(part => Array.from(part)));
@@ -21,8 +22,9 @@ const tap = id => msg(4, nested([169495254, 462702848, 1, 200453700, 1, 48687757
 const menu = (...items) => msg(5, nested([169495254, 98150882, 1, 66439850], cat(...items, msg(4, text('TRACK-KEEP')))));
 const card = (...parts) => msg(1, msg(50195462, cat(msg(1, nested([153515154, 172660663, 1, 168777401, 5, 232954548, 18], cat(...parts))), msg(4, [1, 2]))));
 const divider = msg(1, msg(50195462, msg(1, nested([153515154, 172660663, 1, 168777401, 5, 347043917], text('DIVIDER')))));
+const openUrl = (id, type = 'video') => 'http://192.168.6.7:5100/?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id) + '&type=' + type;
 const added = id => msg(1, msg(66441108, cat(label('从第三方下载'), msg(2, [8, 147, 1]),
-  msg(3, msg(49679253, cat(msg(1, text('https://example.com/download?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))), [16, 1]))))));
+  msg(3, msg(49679253, cat(msg(1, text(openUrl(id))), [16, 1]))))));
 const continuation = list => cat(msg(1, text('CONTEXT-KEEP')), msg(10, msg(49399797, cat(list, msg(2, text('TOKEN-KEEP'))))), msg(777, text('REGISTRY-KEEP')));
 const home = list => nested([9, 58173949, 1, 58174010, 4, 49399797], list);
 
@@ -44,9 +46,9 @@ function run(body, response = {}) {
 const bytes = result => Buffer.from(new Uint8Array(result.output.bodyBytes));
 const untouched = result => assert.equal(Object.keys(result.output).length, 0);
 
-test('snippet only binds browse responses to the standalone script', () => {
+test('snippet binds browse responses and the generated download address to the standalone scripts', () => {
   const rules = snippet.split('\n').filter(line => line && !line.startsWith('#') && !line.startsWith('hostname'));
-  assert.equal(rules.length, 1);
+  assert.equal(rules.length, 2);
   const [pattern, url, type, path] = rules[0].split(' ');
   assert.deepEqual([url, type, path], ['url', 'script-response-body', 'https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubeDownload/YouTubeDownloadMenu.js']);
   assert.ok(new RegExp(pattern).test('https://youtubei.googleapis.com/youtubei/v1/browse?prettyPrint=false'));
@@ -59,7 +61,7 @@ for (const [name, wrap] of [['continuation', continuation], ['initial home', hom
   const after = wrap(cat(divider, card(tap('AAAAAAAAAAA'), menu(added('AAAAAAAAAAA'), ...items('AAAAAAAAAAA')), msg(45, text('ai_summary_AAAAAAAAAAA'))), divider, card(tap('BBBB-BBB_BB'), menu(added('BBBB-BBB_BB'), ...items('BBBB-BBB_BB')))));
   const result = run(before);
   assert.deepEqual(bytes(result), Buffer.from(after));
-  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.1.2] browse added=2']);
+  assert.deepEqual(result.logs, ['[YouTubeDownloadMenu 0.2.0] browse added=2']);
   // 已含同名条目的菜单不重复添加。
   untouched(run(after));
 });
@@ -84,4 +86,43 @@ test('unexpected responses pass through', () => {
   const broken = run(cat(msg(10, msg(49399797, cat(card(tap('AAAAAAAAAAA'), menu(service('举报'))), [10, 9, 1])))));
   untouched(broken);
   assert.ok(broken.logs[0].includes('error:'));
+});
+
+/**
+ * 功能：以 script-echo-response 的形式运行表单脚本。
+ * 更新时间：2026-10-06
+ * @param {string} url 请求地址。
+ * @returns {Object} 脚本返回的响应。
+ */
+function runPost(url) {
+  let output, calls = 0;
+  vm.runInNewContext(post, {console:{log() {}}, $request:{url, method:'GET', headers:{}}, $done(value) {output = value; calls++;}}, {timeout:2000});
+  assert.equal(calls, 1);
+  return output;
+}
+
+test('generated address is matched by the echo rule and answered with an auto-submitting POST form', () => {
+  const rule = snippet.split('\n').filter(line => line.includes('script-echo-response'));
+  assert.equal(rule.length, 1);
+  const [pattern, url, type, path] = rule[0].split(' ');
+  assert.deepEqual([url, type, path], ['url', 'script-echo-response', 'https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTubeDownload/YouTubeDownloadPost.js']);
+  const regex = new RegExp(pattern);
+  for (const kind of ['video', 'audio']) {
+    assert.ok(regex.test(openUrl('mfJqH4kc2oQ', kind)));
+    const output = runPost(openUrl('mfJqH4kc2oQ', kind));
+    assert.equal(output.status, 'HTTP/1.1 200 OK');
+    assert.equal(output.headers['Content-Type'], 'text/html; charset=utf-8');
+    assert.ok(output.body.includes('<form id="f" method="post" action="http://192.168.6.7:5100/">'));
+    assert.ok(output.body.includes('<input type="hidden" name="url" value="https://www.youtube.com/watch?v=mfJqH4kc2oQ">'));
+    assert.ok(output.body.includes(`<input type="hidden" name="type" value="${kind}">`));
+    assert.ok(output.body.includes('document.getElementById("f").submit()'));
+  }
+  // 表单提交的目标地址和站点首页不被规则匹配，不会循环。
+  for (const other of ['http://192.168.6.7:5100/', 'http://192.168.6.7:5100/?url=', 'http://192.168.6.7:5100/?url=https%3A%2F%2Fevil.example%2F&type=video',
+    openUrl('mfJqH4kc2oQ') + '&x=1', openUrl('short'), openUrl('mfJqH4kc2oQ', 'other'), 'http://192.168.6.70:5100/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=video', 'https://192.168.6.7:5100/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DmfJqH4kc2oQ&type=video']) {
+    assert.ok(!regex.test(other), other);
+    const output = runPost(other);
+    assert.equal(output.status, 'HTTP/1.1 400 Bad Request');
+    assert.ok(!output.body.includes('<form') && !output.body.includes('evil'));
+  }
 });
