@@ -12,7 +12,7 @@ const root = new URL('../', import.meta.url);
 const names = ['YouTubeFeed', 'YouTubePlayback', 'YouTubeConfig', 'YouTubeLogger'];
 const bundles = {request: ['YouTubeConfig', 'YouTubePlayback', 'YouTubeLogger'], response: names};
 const qxRoot = new URL('../../quantumultx/YouTube/', root);
-const qxBundles = {request: ['YouTubePlayback'], response: ['YouTubeFeed', 'YouTubePlayback']};
+const qxBundles = {request: ['YouTubePlayback', 'YouTubeTranslation'], response: ['YouTubeFeed', 'YouTubePlayback']};
 const qxDownloadRoot = new URL('../../quantumultx/YouTubeDownload/', root);
 const qxPlusRoot = new URL('../../quantumultx/YouTubePlus/', root);
 const check = process.argv.includes('--check');
@@ -105,10 +105,13 @@ async function compileQXScript(phase, debug, plus) {
   const regions = ['original', 'CN', 'HK', 'TW', 'US', 'JP', 'KR', 'SG', 'GB', 'DE', 'RU'];
   for (const key of ['background_playback', 'hide_home_shorts']) if (typeof saved[key] !== 'boolean') throw new Error(`options.json 的 ${key} 必须为 true 或 false`);
   if (!regions.includes(saved.playback_region)) throw new Error(`options.json 的 playback_region 必须为 ${regions.join('、')} 之一`);
-  const options = {background_playback: saved.background_playback, hide_home_shorts: saved.hide_home_shorts, playback_region: saved.playback_region, script_debug: debug};
+  if (typeof saved.translation_enabled !== 'boolean') throw new Error('options.json 的 translation_enabled 必须为 true 或 false');
+  if (!['zh-CN', 'en-US'].includes(saved.translation_target)) throw new Error('options.json 的 translation_target 必须为 zh-CN 或 en-US');
+  const options = {background_playback: saved.background_playback, hide_home_shorts: saved.hide_home_shorts, playback_region: saved.playback_region, translation_enabled: saved.translation_enabled, translation_target: saved.translation_target, script_debug: debug};
   const route = phase === 'request'
     ? `if (/^https:\\/\\/[a-z0-9-]+\\.googlevideo\\.com\\/initplayback(?:\\?[^#]*)?$/i.test(url)) return ytQXEmptyVideo($request, $done);
-       if (/\\/youtubei\\/v1\\/(?:player|get_watch|player\\/ad_break)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();`
+       if (/\\/youtubei\\/v1\\/(?:player|get_watch|player\\/ad_break)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();
+       if (/^https:\\/\\/(?:www\\.|m\\.)?youtube\\.com\\/api\\/timedtext\\?/i.test(url)) return handlers.YouTubeTranslation();`
     : `if (/\\/youtubei\\/v1\\/(?:browse|next|search)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubeFeed();
        if (/\\/youtubei\\/v1\\/(?:player|get_watch|reel\\/reel_watch_sequence)(?:\\?[^#]*)?$/i.test(url)) return handlers.YouTubePlayback();`;
   // 合并版：下载菜单脚本原样包进函数，以形参接收去广告后的正文；去广告模块结束时不直接完成，而是把结果交给它。

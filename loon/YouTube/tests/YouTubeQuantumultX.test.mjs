@@ -69,19 +69,22 @@ const plain = value => JSON.parse(JSON.stringify(value));
 
 test('snippet binds each rule to the matching script type and published bundle', () => {
   const rules = snippet.split('\n').filter(line => line && !line.startsWith('#') && !line.startsWith('hostname'));
-  assert.equal(rules.length, 4);
-  const [adBreak, request, response, init] = rules.map(line => {const [pattern, url, type, path] = line.split(' '); assert.equal(url, 'url'); return {regex:new RegExp(pattern), type, path};});
+  assert.equal(rules.length, 5);
+  const [adBreak, request, response, init, captions] = rules.map(line => {const [pattern, url, type, path] = line.split(' '); assert.equal(url, 'url'); return {regex:new RegExp(pattern), type, path};});
   const base = 'https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/dist/';
   assert.deepEqual([adBreak.type, adBreak.path], ['script-echo-response', base + 'request.min.js']);
   assert.deepEqual([request.type, request.path], ['script-request-body', base + 'request.min.js']);
   assert.deepEqual([response.type, response.path], ['script-response-body', base + 'response.min.js']);
   assert.deepEqual([init.type, init.path], ['script-request-header', base + 'request.min.js']);
+  assert.deepEqual([captions.type, captions.path], ['script-request-header', base + 'request.min.js']);
+  for (const host of ['www.youtube.com', 'm.youtube.com', 'youtube.com']) assert.ok(captions.regex.test('https://' + host + '/api/timedtext?v=v&lang=en'));
+  assert.ok(!captions.regex.test('https://www.youtube.com/api/timedtext') && !captions.regex.test('https://example.com/api/timedtext?v=v') && !captions.regex.test(api + 'player'));
   for (const name of ['player', 'get_watch']) assert.ok(request.regex.test(api + name + '?prettyPrint=false') && !adBreak.regex.test(api + name + '?prettyPrint=false'));
   for (const url of [api + 'player/ad_break', api + 'player/ad_break?prettyPrint=false', 'https://www.youtube.com/youtubei/v1/player/ad_break']) assert.ok(adBreak.regex.test(url) && !request.regex.test(url));
   for (const name of ['browse', 'next', 'search', 'player', 'get_watch', 'reel/reel_watch_sequence']) assert.ok(response.regex.test('https://www.youtube.com/youtubei/v1/' + name));
   assert.ok(!request.regex.test(api + 'browse') && !response.regex.test(api + 'player/ad_break') && !response.regex.test(api + 'log_event'));
   assert.ok(init.regex.test('https://rr5---sn-abc.googlevideo.com/initplayback?id=1'));
-  for (const rule of [adBreak, request, response, init]) assert.ok(!rule.regex.test('https://rr5---sn-abc.googlevideo.com/videoplayback?ctier=L'));
+  for (const rule of [adBreak, request, response, init, captions]) assert.ok(!rule.regex.test('https://rr5---sn-abc.googlevideo.com/videoplayback?ctier=L'));
   const hosts = snippet.split('\n').find(line => line.startsWith('hostname = ')).slice(11).split(', ');
   assert.deepEqual(hosts, ['youtubei.googleapis.com', 'youtubei-att.googleapis.com', 'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', '*.googlevideo.com']);
 });
@@ -182,7 +185,7 @@ test('debug variant differs from the release build only by script paths and the 
   const debugSnippet = read('YouTubeNoAds.debug.snippet', qxRoot);
   const rules = value => value.split('\n').filter(line => line && !line.startsWith('#'));
   assert.deepEqual(rules(debugSnippet), rules(snippet).map(line => line.replace(/\/dist\/(request|response)\.min\.js/, '/dist/$1.debug.min.js')));
-  assert.equal(rules(debugSnippet).filter(line => line.includes('.debug.min.js')).length, 4);
+  assert.equal(rules(debugSnippet).filter(line => line.includes('.debug.min.js')).length, 5);
   const request = {url:api + 'browse', method:'POST', headers:{}}, response = {statusCode:200, headers:{'Content-Type':'application/json'}, body:'{"contents":{}}'};
   for (const phase of ['request', 'response']) {
     const debug = read(`dist/${phase}.debug.min.js`, qxRoot), body = code => code.slice(code.indexOf('\n'));
@@ -205,6 +208,28 @@ test('release build logs version, phase, endpoint and outcome only when it answe
   assert.deepEqual(request({url:api + 'player?key=PRIVATE', method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({context:{adSignalsInfo:{params:[1]}, client:{hl:'zh'}}, playbackContext:{contentPlaybackContext:{adParams:'x', vis:0}}, videoId:'PRIVATE'})}), [line('request player changed')]);
   assert.deepEqual(response({url:api + 'next?key=PRIVATE', method:'POST', headers:{}}, {statusCode:200, headers:{'Content-Type':'application/json'}, body:'{"contents":{}}'}), []);
   assert.deepEqual(response({url:api + 'player', method:'POST', headers:{}}), []);
+});
+
+test('caption request gets the translation target as a same-origin path, keeping every other parameter', () => {
+  const base = 'https://www.youtube.com/api/timedtext?v=PRIVATE&ei=E&sparams=ip%2Cexpire%2Cv&signature=S.IG&key=yt8&kind=asr&lang=en&fmt=srv3';
+  const run = (url, method = 'GET', code = qx.request) => runQX('request', {url, method, headers:{}}, undefined, code);
+  assert.deepEqual(plain(run(base)), {path:'/api/timedtext?v=PRIVATE&ei=E&sparams=ip%2Cexpire%2Cv&signature=S.IG&key=yt8&kind=asr&lang=en&fmt=srv3&tlang=zh-Hans'});
+  assert.deepEqual(plain(run(base + '&tlang=ja')), {path:'/api/timedtext?v=PRIVATE&ei=E&sparams=ip%2Cexpire%2Cv&signature=S.IG&key=yt8&kind=asr&lang=en&fmt=srv3&tlang=zh-Hans'});
+  // 已是目标语言、签名覆盖 tlang、非 GET 或缺少原语言时原样放行。
+  assert.deepEqual(plain(run(base.replace('lang=en', 'lang=zh-Hans'))), {});
+  assert.deepEqual(plain(run(base.replace('sparams=ip%2Cexpire%2Cv', 'sparams=ip%2Ctlang%2Cv'))), {});
+  assert.deepEqual(plain(run(base, 'POST')), {});
+  assert.deepEqual(plain(run(base.replace('&lang=en', ''))), {});
+  const off = qx.request.replace(/translation_enabled:(?:true|!0)/, 'translation_enabled:false');
+  assert.notEqual(off, qx.request);
+  assert.deepEqual(plain(run(base, 'GET', off)), {});
+  const english = qx.request.replace('translation_target:"zh-CN"', 'translation_target:"en-US"');
+  assert.notEqual(english, qx.request);
+  assert.deepEqual(plain(run(base.replace('lang=en', 'lang=ja'), 'GET', english)), {path:'/api/timedtext?v=PRIVATE&ei=E&sparams=ip%2Cexpire%2Cv&signature=S.IG&key=yt8&kind=asr&lang=ja&fmt=srv3&tlang=en'});
+  assert.deepEqual(plain(run(base, 'GET', english)), {});
+  const logs = []; vm.runInNewContext(qx.request, {...globals, console:{log:value => logs.push(value)}, $request:{url:base, method:'GET', headers:{}}, $prefs:{valueForKey() {return null;}, setValueForKey() {return true;}, removeValueForKey() {return true;}}, $done() {}}, {timeout:2000});
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /^\[YouTubeNoAds \d+\.\d+\.\d+\] request timedtext changed$/);
 });
 
 test('fixed background playback option changes the player response only when built as enabled', () => {
