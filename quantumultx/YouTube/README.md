@@ -48,7 +48,23 @@
 
 ## 全局 `udp_drop_list` 的取舍
 
-去广告规则只对经 MitM 解密的 TCP 请求生效。YouTube App 会优先用 QUIC（UDP 443）访问 Google 域名，QUIC 走通时规则全部不命中，所以必须让 YouTube 的 UDP 443 走不通。有两种做法。
+### 为什么要拦 UDP 443
+
+Quantumult X 的 MitM 只能解密走 TCP 的 HTTPS（HTTP/1.1 和 HTTP/2），解不了 QUIC（HTTP/3）。
+
+- **TCP 上的 HTTPS。** Quantumult X 用已信任的证书冒充服务器，与 App 完成 TLS 握手，从而看到并改写明文。重写和脚本都建立在这一步上。
+- **QUIC。** 加密握手嵌在 QUIC 协议里，跑在 UDP 上。解密需要实现完整的 QUIC 协议栈来做中间人，Quantumult X 没有实现。QUIC 流量对它只是无法解析的 UDP 包，只能转发或丢弃。
+
+YouTube App 会优先用 QUIC 访问 Google 域名，QUIC 走通时去广告规则全部不命中。所以整个去广告的前提是：
+
+```text
+拦掉 UDP 443 → App 发现 QUIC 不通 → 回退到 TCP → MitM 解密 → 规则命中
+```
+
+`udp_drop_list = 443` 和 `udp-relay=false` 的节点，是实现第一步的两种手段。在已被解密的响应里写 `Alt-Svc: clear` 不能代替这一步：脚本要先运行才能写这个响应头，而 QUIC 走通时脚本不会运行。
+
+### 两种做法
+
 
 | | `udp_drop_list = 443` | YouTube 走 `udp-relay=false` 的节点 |
 | --- | --- | --- |
