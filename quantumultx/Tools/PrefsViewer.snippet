@@ -1,0 +1,11 @@
+# 本地存储查看器（Quantumult X）
+# 功能：只读查看 Quantumult X 本地存储（$prefs）中指定键的内容，用于确认脚本保存了什么；不写入、不删除、不联网。
+# 用法：Quantumult X 运行时，用 Safari 访问 http://example.com/qx-prefs?key=键名 ，例如 key=Biliverse。
+# 说明：example.com 只是用来触发规则的占位地址，请求由脚本在本机应答，不会发往该网站。
+#       Quantumult X 不提供列出全部键名的接口，键名需要从脚本的说明或源码里查。
+# 注意：存储里可能有其他脚本保存的登录凭据，页面会原样显示。不用时请停用本片段。
+# 状态：2026-10-07 加入，尚未在设备上确认。
+
+hostname = example.com
+
+^https?:\/\/example\.com\/qx-prefs(?:\?[^#]*)?$ url script-echo-response https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/Tools/PrefsViewer.js
