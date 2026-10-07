@@ -1,0 +1,13 @@
+# Biliverse 设置页修复（Quantumult X）
+# 用途：让 Biliverse Enhanced 在哔哩哔哩 App 内的设置页能读写设置；与 Biliverse.Enhanced.snippet 一起启用，不替代它。
+# 问题：Enhanced 用 script-echo-response 运行设置存储接口（/api/get、/api/set、/api/delete），
+#       Quantumult X 的这种脚本拿不到请求正文，接口一律返回 HTTP 400，设置页显示“加载失败：HTTP 400”。
+# 做法：同一个接口、同一份脚本，改用 script-request-body 运行，脚本能读到正文并直接应答，请求不发往服务器。
+# 脚本来自 NSNanoCat/PreferencePanes 的发布产物，与 Enhanced 引用的是同一个地址，本仓库不修改也不保存它。
+# 状态：2026-10-07 加入，尚未在设备上确认。
+# 注意：本规则与 Enhanced 的规则匹配同一地址，只有一条会生效。启用后若日志里该接口仍显示 script-echo-response，
+#       把下面这条规则复制到主配置的 [rewrite_local]，本地规则优先于引用的片段。
+
+hostname = biliverse.github.io, app.bilibili.com
+
+^https:\/\/(?:biliverse\.github\.io|app\.bilibili\.com)\/api\/(?:get|set|delete)(?:\?.*)?$ url script-request-body https://github.com/NSNanoCat/PreferencePanes/releases/latest/download/api.js
