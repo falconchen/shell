@@ -253,6 +253,24 @@ https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/YouTube/YouT
 
 分流规则的维护方式、开关修改方法、与 Loon 版的差异和待确认的问题见 [详细说明](quantumultx/YouTube/README.md)。上游 teaoea/shell 后来也提供了 Quantumult X 版，但没有做过实机验证，本仓库不采用，原因见 [为什么不直接使用上游的 Quantumult X 版](quantumultx/YouTube/README.md#为什么不直接使用上游的-quantumult-x-版)。Loon 用户请看 [Loon 插件总览](loon/README.md)。
 
+## Quantumult X：哔哩哔哩去广告与界面自定义
+
+哔哩哔哩 App 使用第三方项目 [Biliverse](https://biliverse.github.io/) 的两个片段：ADBlock 去广告，Enhanced 自定义首页标签、底部导航栏和“我的”页入口。本仓库另外提供一个修复片段，解决 Enhanced 的设置页在 Quantumult X 上“加载失败：HTTP 400”的问题。三个片段同时启用：
+
+```text
+https://github.com/Biliverse/ADBlock/releases/latest/download/BiliBili.ADBlock.snippet
+```
+
+```text
+https://github.com/Biliverse/Enhanced/releases/latest/download/Biliverse.Enhanced.snippet
+```
+
+```text
+https://raw.githubusercontent.com/falconchen/shell/main/quantumultx/Bilibili/BiliverseSettingsFix.snippet
+```
+
+设置入口在哔哩哔哩 App 的“我的 → 更多服务 → Biliverse”，只能在 App 内打开，Safari 里无法使用。用户已于 2026-10-07 在设备上确认广告消失、设置页可用。安装步骤、设置方法、设置的保存位置和已知问题见 [详细说明](quantumultx/Bilibili/README.md)。
+
 ## 许可证
 
 [MIT](LICENSE)
